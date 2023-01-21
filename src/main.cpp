@@ -904,6 +904,38 @@ void setup()
   }
   Serial.println("mDNS responder started");
 
+  server.on("/style.css", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/css", 
+     [](String s){
+      String readString="";
+      fUpdate = fopen("/spiffs/style.css", "r");
+      char line[64];
+      while (fgets(line, sizeof(line), fUpdate ))
+      {
+        readString +=  line;
+      }
+      fclose(fUpdate);
+      return readString;
+      }(loginIndex)   
+    ); });
+  server.on("/index.js", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/javascript", 
+     [](String s){
+      String readString="";
+      fUpdate = fopen("/spiffs/index.js", "r");
+      char line[64];
+      while (fgets(line, sizeof(line), fUpdate ))
+      {
+        readString +=  line;
+      }
+      fclose(fUpdate);
+      return readString;
+      }(loginIndex)   
+    ); });
   server.on("/", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
