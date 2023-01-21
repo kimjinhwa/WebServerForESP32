@@ -50,6 +50,51 @@ String loginIndex =
     "</script>" +
     style;
 
+String fileUpload =
+    "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+    "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
+    "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
+    "<label id='file-input' for='file'>   Choose file...</label>"
+    "<input type='submit' class=btn value='Update'>"
+    "<br><br>"
+    "<div id='prg'></div>"
+    "<br><div id='prgbar'><div id='bar'></div></div><br></form>"
+    "<script>"
+    "function sub(obj){"
+    "var fileName = obj.value.split('\\\\');"
+    "document.getElementById('file-input').innerHTML = '   '+ fileName[fileName.length-1];"
+    "};"
+    "$('form').submit(function(e){"
+    "e.preventDefault();"
+    "var form = $('#upload_form')[0];"
+    "var data = new FormData(form);"
+    "$.ajax({"
+    "url: '/upload',"
+    "type: 'POST',"
+    "data: data,"
+    "contentType: false,"
+    "processData:false,"
+    "xhr: function() {"
+    "var xhr = new window.XMLHttpRequest();"
+    "xhr.upload.addEventListener('progress', function(evt) {"
+    "if (evt.lengthComputable) {"
+    "var per = evt.loaded / evt.total;"
+    "$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+    "$('#bar').css('width',Math.round(per*100) + '%');"
+    "}"
+    "}, false);"
+    "return xhr;"
+    "},"
+    "success:function(d, s) {"
+    "console.log('success!') "
+    "},"
+    "error: function (a, b, c) {"
+    "}"
+    "});"
+    "});"
+    "</script>" +
+    style;
+
 /* Server Index Page */
 String serverIndex =
     "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
@@ -142,6 +187,22 @@ void ls_configCallback(cmd *cmdPtr)
       printf("Fail\r\n");
   }
   closedir(dir);
+}
+void rm_configCallback(cmd *cmdPtr)
+{
+  Command cmd(cmdPtr);
+  Argument arg = cmd.getArgument(0);
+  String argVal = arg.getValue();
+  Serial.print("\r\n");
+
+  if (argVal.length() == 0)
+    return;
+  argVal = String("/spiffs/") + argVal;
+
+  if (unlink(argVal.c_str()) == -1)
+    printf("Faild to delete %s", argVal.c_str());
+  else
+    printf("File deleted %s", argVal.c_str());
 }
 void cat_configCallback(cmd *cmdPtr)
 {
@@ -240,7 +301,7 @@ void SimpleCLISetUp()
 {
   cmd_ls_config = cli.addCommand("ls", ls_configCallback);
 
-  cmd_ls_config = cli.addCommand("dir", ls_configCallback);
+  cmd_ls_config = cli.addSingleArgCmd("rm", rm_configCallback);
   cmd_ls_config = cli.addSingleArgCmd("cat", cat_configCallback);
   // cmd_ls_config.addArgument("filename","");
   cmd_ls_config = cli.addCommand("del", del_configCallback);
@@ -276,29 +337,29 @@ void EthLan8720Start()
   Serial.print(WiFi.localIP());
   Serial.println(" 23' to connect");
 }
-void writeHellowTofile()
-{
-  struct stat st;
-  FILE *f;
-  if (stat("/spiffs/hello.txt", &st) == 0)
-  {
-    // Delete it if it exists
-    // unlink("/spiffs/foo.txt");
-    f = fopen("/spiffs/hello.txt", "a+");
-  }
-  else
-  {
-    f = fopen("/spiffs/hello.txt", "w+");
-  }
+// void writeHellowTofile()
+// {
+//   struct stat st;
+//   FILE *f;
+//   if (stat("/spiffs/hello.txt", &st) == 0)
+//   {
+//     // Delete it if it exists
+//     // unlink("/spiffs/foo.txt");
+//     f = fopen("/spiffs/hello.txt", "a+");
+//   }
+//   else
+//   {
+//     f = fopen("/spiffs/hello.txt", "w+");
+//   }
 
-  if (f == NULL)
-  {
-    printf("\r\nFailed to open file for writing");
-    return;
-  }
-  fprintf(f, "Hello World!\n");
-  fclose(f);
-}
+//   if (f == NULL)
+//   {
+//     printf("\r\nFailed to open file for writing");
+//     return;
+//   }
+//   fprintf(f, "Hello World!\n");
+//   fclose(f);
+// }
 void littleFsInit()
 {
   esp_vfs_spiffs_conf_t conf = {
@@ -348,33 +409,33 @@ void littleFsInit()
     printf("\r\nPartition size: total: %d, used: %d", total, used);
   }
 
-  printf("\r\nOpening file");
+  // printf("\r\nOpening file");
   // Check if destination file exists before renaming
 
-  writeHellowTofile();
-  writeHellowTofile();
-  FILE *f;
+  // writeHellowTofile();
+  // writeHellowTofile();
+  //  FILE *f;
 
-  printf("File written\r\n");
-  printf("File written\r\n");
-  // Open renamed file for reading
-  printf("Reading file\r\n");
-  f = fopen("/spiffs/hello.txt", "r");
-  if (f == NULL)
-  {
-    printf("Failed to open file for reading");
-    return;
-  }
-  char line[64];
-  while (fgets(line, sizeof(line), f))
-  {
-    printf("%s", line);
-  }
+  // printf("File written\r\n");
+  // printf("File written\r\n");
+  // // Open renamed file for reading
+  // printf("Reading file\r\n");
+  // f = fopen("/spiffs/hello.txt", "r");
+  // if (f == NULL)
+  // {
+  //   printf("Failed to open file for reading");
+  //   return;
+  // }
+  // char line[64];
+  // while (fgets(line, sizeof(line), f))
+  // {
+  //   printf("%s", line);
+  // }
 
-  fclose(f);
-  printf("\r\nAll Data read done.");
-  printf("\r\nAll Data read done.");
-  printf("All Data read done.\r\n");
+  // fclose(f);
+  // printf("\r\nAll Data read done.");
+  // printf("\r\nAll Data read done.");
+  // printf("All Data read done.\r\n");
 }
 void readInputSerial()
 {
@@ -406,6 +467,8 @@ void readInputSerial()
   }
   // Serial.setTimeout(100);
 }
+FILE *fUpdate;
+int UpdateSize;
 void setup()
 {
   Serial.begin(115200);
@@ -416,8 +479,7 @@ void setup()
   WiFi.softAP(soft_ap_ssid, soft_ap_password);
   // WiFi.softAPsetHostname(soft_ap_ssid);
   // WiFi.begin(ssid, password);
-  // Serial.println("");
-  /*use mdns for host name resolution*/
+
   if (!MDNS.begin(host))
   { // http://esp32.local
     Serial.println("Error setting up MDNS responder!");
@@ -431,11 +493,54 @@ void setup()
             {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", loginIndex); });
+
+  server.on("/fileUpload", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", fileUpload); });
+
   server.on("/serverIndex", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", serverIndex); });
   /*handling uploading firmware file */
+  server.on(
+      "/upload", HTTP_POST, []()
+      {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/plain", /*(update.haserror()) ? "fail" :*/ "OK");
+    Serial.printf("Finish"); },
+      []()
+      {
+    HTTPUpload &upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START)
+    {
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+      { // start with max available size
+        Update.printError(Serial);
+      }
+      upload.filename = String("/spiffs/") + upload.filename;
+      fUpdate = fopen(upload.filename.c_str(), "w+");
+      UpdateSize = 0;
+    }
+    else if (upload.status == UPLOAD_FILE_WRITE)
+    {
+      fwrite((char *)upload.buf, 1, upload.currentSize, fUpdate);
+      UpdateSize += upload.currentSize;
+      Serial.printf(".");
+      // Serial.printf("Update progress.: %s %d %d/n", upload.filename.c_str(), upload.currentSize, upload.totalSize);
+    }
+    else if (upload.status == UPLOAD_FILE_END)
+    {
+      // Serial.printf("Update end....: %s length = %d\n", upload.filename.c_str(), UpdateSize);
+      fclose(fUpdate);
+      Serial.printf("Update END....File name : %s\r\n", upload.filename.c_str());
+      Serial.printf("name : %s\r\n", upload.name.c_str());
+      Serial.printf("type: %s\r\n", upload.type.c_str());
+      Serial.printf("size: %d\r\n", upload.totalSize);
+      Update.end(false);
+    }
+      });
   server.on(
       "/update", HTTP_POST, []()
       {
@@ -444,34 +549,34 @@ void setup()
     ESP.restart(); },
       []()
       {
-        HTTPUpload &upload = server.upload();
-        if (upload.status == UPLOAD_FILE_START)
-        {
-          Serial.printf("Update: %s\n", upload.filename.c_str());
-          if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-          { // start with max available size
-            Update.printError(Serial);
-          }
-        }
-        else if (upload.status == UPLOAD_FILE_WRITE)
-        {
-          /* flashing firmware to ESP*/
-          if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
-          {
-            Update.printError(Serial);
-          }
-        }
-        else if (upload.status == UPLOAD_FILE_END)
-        {
-          if (Update.end(true))
-          { // true to set the size to the current progress
-            Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
-          }
-          else
-          {
-            Update.printError(Serial);
-          }
-        }
+    HTTPUpload &upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START)
+    {
+      Serial.printf("Update: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+      { // start with max available size
+        Update.printError(Serial);
+      }
+    }
+    else if (upload.status == UPLOAD_FILE_WRITE)
+    {
+      /* flashing firmware to ESP*/
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+      {
+        Update.printError(Serial);
+      }
+    }
+    else if (upload.status == UPLOAD_FILE_END)
+    {
+      if (Update.end(true))
+      { // true to set the size to the current progress
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+      }
+      else
+      {
+        Update.printError(Serial);
+      }
+    }
       });
   server.begin();
 
