@@ -920,6 +920,40 @@ void setup()
       return readString;
       }(loginIndex)   
     ); });
+
+  server.on("/svg.min.js", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/javascript", 
+     [](String s){
+      String readString;
+      fUpdate = fopen("/spiffs/svg.min.js", "r");
+      int ch ;
+      int readCount =0;
+      char* chp= (char*)ps_malloc(500000);
+      if(chp == NULL){
+        printf("memory error\r\n");
+      }
+      else{
+        while((ch = fgetc(fUpdate)) != EOF){
+          chp[readCount++]=ch;
+      };
+      chp[readCount]=0x00;
+      readString = chp;
+      //printf("%s",readString.c_str());
+
+      }
+      
+      //readString = "test";
+      fclose(fUpdate);
+      return readString;
+      }(loginIndex)   
+    ); });
+
+
+ 
+
+
   server.on("/index.js", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
@@ -936,6 +970,7 @@ void setup()
       return readString;
       }(loginIndex)   
     ); });
+
   server.on("/", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
