@@ -489,7 +489,25 @@ void setup()
     }
   }
   Serial.println("mDNS responder started");
+
   server.on("/", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", 
+     [](String s){
+      String readString="";
+      fUpdate = fopen("/spiffs/index.html", "r");
+      char line[64];
+      while (fgets(line, sizeof(line), fUpdate ))
+      {
+        readString +=  line;
+      }
+      fclose(fUpdate);
+      return readString;
+      }(loginIndex)   
+    ); });
+
+  server.on("/login", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", loginIndex); });
@@ -512,34 +530,34 @@ void setup()
     Serial.printf("Finish"); },
       []()
       {
-    HTTPUpload &upload = server.upload();
-    if (upload.status == UPLOAD_FILE_START)
-    {
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-      { // start with max available size
-        Update.printError(Serial);
-      }
-      upload.filename = String("/spiffs/") + upload.filename;
-      fUpdate = fopen(upload.filename.c_str(), "w+");
-      UpdateSize = 0;
-    }
-    else if (upload.status == UPLOAD_FILE_WRITE)
-    {
-      fwrite((char *)upload.buf, 1, upload.currentSize, fUpdate);
-      UpdateSize += upload.currentSize;
-      Serial.printf(".");
-      // Serial.printf("Update progress.: %s %d %d/n", upload.filename.c_str(), upload.currentSize, upload.totalSize);
-    }
-    else if (upload.status == UPLOAD_FILE_END)
-    {
-      // Serial.printf("Update end....: %s length = %d\n", upload.filename.c_str(), UpdateSize);
-      fclose(fUpdate);
-      Serial.printf("Update END....File name : %s\r\n", upload.filename.c_str());
-      Serial.printf("name : %s\r\n", upload.name.c_str());
-      Serial.printf("type: %s\r\n", upload.type.c_str());
-      Serial.printf("size: %d\r\n", upload.totalSize);
-      Update.end(false);
-    }
+        HTTPUpload &upload = server.upload();
+        if (upload.status == UPLOAD_FILE_START)
+        {
+          if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+          { // start with max available size
+            Update.printError(Serial);
+          }
+          upload.filename = String("/spiffs/") + upload.filename;
+          fUpdate = fopen(upload.filename.c_str(), "w+");
+          UpdateSize = 0;
+        }
+        else if (upload.status == UPLOAD_FILE_WRITE)
+        {
+          fwrite((char *)upload.buf, 1, upload.currentSize, fUpdate);
+          UpdateSize += upload.currentSize;
+          Serial.printf(".");
+          // Serial.printf("Update progress.: %s %d %d/n", upload.filename.c_str(), upload.currentSize, upload.totalSize);
+        }
+        else if (upload.status == UPLOAD_FILE_END)
+        {
+          // Serial.printf("Update end....: %s length = %d\n", upload.filename.c_str(), UpdateSize);
+          fclose(fUpdate);
+          Serial.printf("Update END....File name : %s\r\n", upload.filename.c_str());
+          Serial.printf("name : %s\r\n", upload.name.c_str());
+          Serial.printf("type: %s\r\n", upload.type.c_str());
+          Serial.printf("size: %d\r\n", upload.totalSize);
+          Update.end(false);
+        }
       });
   server.on(
       "/update", HTTP_POST, []()
@@ -549,34 +567,34 @@ void setup()
     ESP.restart(); },
       []()
       {
-    HTTPUpload &upload = server.upload();
-    if (upload.status == UPLOAD_FILE_START)
-    {
-      Serial.printf("Update: %s\n", upload.filename.c_str());
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-      { // start with max available size
-        Update.printError(Serial);
-      }
-    }
-    else if (upload.status == UPLOAD_FILE_WRITE)
-    {
-      /* flashing firmware to ESP*/
-      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
-      {
-        Update.printError(Serial);
-      }
-    }
-    else if (upload.status == UPLOAD_FILE_END)
-    {
-      if (Update.end(true))
-      { // true to set the size to the current progress
-        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
-      }
-      else
-      {
-        Update.printError(Serial);
-      }
-    }
+        HTTPUpload &upload = server.upload();
+        if (upload.status == UPLOAD_FILE_START)
+        {
+          Serial.printf("Update: %s\n", upload.filename.c_str());
+          if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+          { // start with max available size
+            Update.printError(Serial);
+          }
+        }
+        else if (upload.status == UPLOAD_FILE_WRITE)
+        {
+          /* flashing firmware to ESP*/
+          if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+          {
+            Update.printError(Serial);
+          }
+        }
+        else if (upload.status == UPLOAD_FILE_END)
+        {
+          if (Update.end(true))
+          { // true to set the size to the current progress
+            Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+          }
+          else
+          {
+            Update.printError(Serial);
+          }
+        }
       });
   server.begin();
 
