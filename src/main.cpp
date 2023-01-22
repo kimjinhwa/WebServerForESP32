@@ -590,7 +590,7 @@ void ls_configCallback(cmd *cmdPtr)
 //   Command cmd(cmdPtr);
 //   Argument arg = cmd.getArgument(0);
 //   String argVal = arg.getValue();
-//   Serial.print("\r\n");
+//   printf("\r\n");
 
 //   if (argVal.length() == 0)
 //     return;
@@ -606,7 +606,7 @@ void rm_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
-  Serial.print("\r\n");
+  printf("\r\n");
 
   if (argVal.length() == 0)
     return;
@@ -622,7 +622,7 @@ void cat_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
-  Serial.print("\r\n");
+  printf("\r\n");
 
   if (argVal.length() == 0)
     return;
@@ -661,13 +661,13 @@ void ip_configCallback(cmd *cmdPtr)
   String strValue;
   Argument strArg = cmd.getArgument("ip");
   strValue = strArg.getValue();
-  Serial.println(strValue);
+  printf(strValue.c_str());
   strArg = cmd.getArgument("subnet");
   strValue = strArg.getValue();
-  Serial.println(strValue);
+  printf(strValue.c_str());
   strArg = cmd.getArgument("gateway");
   strValue = strArg.getValue();
-  Serial.println(strValue);
+  printf(strValue.c_str());
 
   printf(" command done\r\n");
 }
@@ -693,21 +693,26 @@ void df_configCallback(cmd *cmdPtr)
              p->type, p->subtype, p->address, p->size, p->label);
     } while (pi = (esp_partition_next(pi)));
   }
+  printf("|  HEAP   |       |          |   %d | ESP.getHeapSize |\r\n", ESP.getHeapSize());
+  printf("|Free heap|       |          |   %d | ESP.getFreeHeap |\r\n", ESP.getFreeHeap());
+  printf("|Psram    |       |          |   %d | ESP.PsramSize   |\r\n", ESP.getPsramSize());
+  printf("|Free Psrm|       |          |   %d | ESP.FreePsram   |\r\n", ESP.getFreePsram());
+  printf("|UsedPsram|       |          |   %d | Psram - FreeRam |\r\n", ESP.getPsramSize() - ESP.getFreePsram());
 }
 
 void errorCallback(cmd_error *errorPtr)
 {
   CommandError e(errorPtr);
 
-  Serial.println("ERROR: " + e.toString());
+  printf((String("ERROR: ") + e.toString()).c_str());
 
   if (e.hasCommand())
   {
-    Serial.println("Did you mean? " + e.getCommand().toString());
+    printf((String("Did you mean? ") + e.getCommand().toString()).c_str());
   }
   else
   {
-    Serial.println(cli.toString());
+    printf(cli.toString().c_str());
   }
 }
 void SimpleCLISetUp()
@@ -736,20 +741,20 @@ void EthLan8720Start()
   // WiFi.onEvent(WiFiEvent);
   ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLK_MODE);
   if (ETH.config(ipddress, gateway, subnetmask, dns1, dns2) == false)
-    Serial.print("Eth config failed...\r\n");
+    printf("Eth config failed...\r\n");
   else
-    Serial.print("Eth config succeed...\r\n");
+    printf("Eth config succeed...\r\n");
   while (!ETH.linkUp())
   {
-    Serial.print("\nconnecting...");
+    printf("\nconnecting...");
     delay(1000);
   }
-  Serial.print("\nConnected");
+  printf("\nConnected");
   // server.begin();
   // server.setNoDelay(true);
-  Serial.print("Ready! Use 'telnet ");
-  Serial.print(WiFi.localIP());
-  Serial.println(" 23' to connect");
+  printf("Ready! Use 'telnet ");
+  printf(WiFi.localIP().toString().c_str());
+  printf(" 23' to connect");
 }
 // void writeHellowTofile()
 // {
@@ -866,15 +871,15 @@ void readInputSerial()
       }
       if (readBuf[0] == '\n' || readBuf[0] == '\r')
       {
-        // Serial.println("inputString is ");
-        // Serial.println(input);
+        // printf("inputString is ");
+        // printf(input);
         cli.parse(input);
         while (Serial.available())
           Serial.readBytes(readBuf, 1);
         // Serial.readString();
         // Serial.setTimeout(0);
         input = "";
-        Serial.print("# ");
+        printf("# ");
         break;
       }
     }
@@ -896,13 +901,13 @@ void setup()
 
   if (!MDNS.begin(host))
   { // http://esp32.local
-    Serial.println("Error setting up MDNS responder!");
+    printf("Error setting up MDNS responder!");
     while (1)
     {
       delay(1000);
     }
   }
-  Serial.println("mDNS responder started");
+  printf("mDNS responder started");
 
   server.on("/style.css", HTTP_GET, []()
             {
@@ -927,10 +932,13 @@ void setup()
     server.send(200, "text/javascript", 
      [](String s){
       String readString;
+      struct stat st;
+      stat("/spiffs/svg.min.js", &st) ;
       fUpdate = fopen("/spiffs/svg.min.js", "r");
+
       int ch ;
       int readCount =0;
-      char* chp= (char*)ps_malloc(500000);
+      char* chp= (char*)ps_malloc(st.st_size+1);
       if(chp == NULL){
         printf("memory error\r\n");
       }
@@ -940,8 +948,6 @@ void setup()
       };
       chp[readCount]=0x00;
       readString = chp;
-      //printf("%s",readString.c_str());
-
       }
       
       //readString = "test";
@@ -949,10 +955,6 @@ void setup()
       return readString;
       }(loginIndex)   
     ); });
-
-
- 
-
 
   server.on("/index.js", HTTP_GET, []()
             {
