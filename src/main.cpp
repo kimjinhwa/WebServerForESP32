@@ -16,6 +16,8 @@
 
 #include <SimpleCLI.h>
 
+#include "resource.h"
+
 #define ETH_PHY_TYPE ETH_PHY_LAN8720
 #define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN
 #define ETH_POWER_PIN 4
@@ -28,6 +30,7 @@ const char *host = "esp32";
 const char *ssid = "iftech";
 const char *password = "iftechadmin";
 /* Style */
+// ;
 String style =
     "<style>#file-input,input{width:100%;height:44px;border-radius:4px;margin:10px auto;font-size:15px}"
     "input{background:#f1f1f1;border:0;padding:0 15px}body{background:#3498db;font-family:sans-serif;font-size:14px;color:#777}"
@@ -52,9 +55,10 @@ String loginIndex =
     "}"
     "</script>" +
     style;
-
+//
+//"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
 String fileUpload =
-    "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+    "<script src='/jquery.min.js'></script>"
     "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
     "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
     "<label id='file-input' for='file'>   Choose file...</label>"
@@ -99,8 +103,9 @@ String fileUpload =
     style;
 
 /* Server Index Page */
+//"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
 String serverIndex =
-    "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+    "<script src='/jquery.min.js'></script>"
     "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
     "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
     "<label id='file-input' for='file'>   Choose file...</label>"
@@ -1021,6 +1026,11 @@ void setup()
       }(loginIndex)   
     ); });
 
+  // jquery_min_js
+  server.on("/jquery.min.js", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/javascript", jquery_min_js); });
   server.on("/login", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
