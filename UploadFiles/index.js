@@ -1,11 +1,13 @@
 var modbus_registor = {
     "type": "modbus",
-    "0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0,
-    "10": 0, "11": 0, "12": 0, "13": 1, "14": 0, "15": 0, "16": 0, "17": 0, "18": 0, "19": 0,
-    "20": 0, "21": 0, "22": 0, "23": 0, "24": 0, "25": 0, "26": 0, "27": 0, "28": 0, "29": 0,
-    "30": 0, "31": 0, "32": 0, "33": 0, "34": 0, "35": 0, "36": 0, "37": 0, "38": 0, "39": 0,
-    "40": 0, "41": 0, "42": 0, "43": 0, "44": 0, "45": 0, "46": 0, "47": 0, "48": 0, "49": 0,
-    "50": 0, "51": 0, "52": 0, "53": 0, "54": 0, "55": 0, "56": 0, "57": 0, "58": 0, "59": 0,
+    "value":[
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0,
+      0,0,0,0,0,0,0,0,0,0
+    ],
 };
 modbus_address =
 {
@@ -501,8 +503,8 @@ draw
 function commandDraw() {
   //PL_1.fill('red');
   //alarm_ad14_set[11] 정전
-  //modbus_registor[14] = 0x0800;
-  if (modbus_registor[14] & 0x0800 )
+  //modbus_registor.value[14] = 0x0800;
+  if (modbus_registor.value[14] & 0x0800 )
   {
     PL_1.fill('none');
     CB_1.fill('none');
@@ -515,7 +517,7 @@ function commandDraw() {
   }
   CB_1_old= CB_1.fill();
   PL2_old= PL_2.fill();
-  if (modbus_registor[12] & 0x0100 ){
+  if (modbus_registor.value[12] & 0x0100 ){
     CB_1.fill('none').move(50,-20);
     cbtext1.move(68, 65-20);
     PL_2.fill('none');
@@ -526,13 +528,13 @@ function commandDraw() {
     PL_2.fill(PL2_old);
   }
 
-  if(modbus_registor[16] & 0x0030 ){
+  if(modbus_registor.value[16] & 0x0030 ){
     batteryConverter.fill('none');
   }
   else
     batteryConverter.fill('red');
 
-  if(modbus_registor[13] & 0x0001 ){
+  if(modbus_registor.value[13] & 0x0001 ){
     PL_3.fill('red');
     CB_2.fill('red').move(215,0);;
     cbtext2.move(68 + 160, 65)
@@ -611,90 +613,96 @@ document.getElementById('viewN').addEventListener('click', (e) => {
   document.getElementById('viewBasic').style.display = 'none';
   document.getElementById('viewSetNetwork').style.display = 'block';
 })
+//btnSetTime
+document.getElementById('btnSetTime').addEventListener('click', (e) => {
+    nowTime = new Date();
+    const data = JSON.stringify({ 'type': 'timeSet', 'reg': 0,'set':nowTime.getTime()/1000  }); /* BIT 12 =0 열림*/
+    console.log(data);
+    webSocket.send(data);
+})
+
+
 
 document.getElementById('btnQuery1').addEventListener('click', (e) => {
-  if(modbus_registor[14] & 0x0800 ){
+  if(modbus_registor.value[14] & 0x0800 ){
     document.getElementById('btnQuery1').innerHTML = '복전';
-    modbus_registor[14] &= ~0x0800 ;
+    modbus_registor.value[14] &= ~0x0800 ;
   }
   else 
   {
-    document.getElementById('btnQuery2').innerHTML = '정전';
-    modbus_registor[14] |= 0x0800 ;
+    document.getElementById('btnQuery1').innerHTML = '정전';
+    modbus_registor.value[14] |= 0x0800 ;
   }
-    const data = JSON.stringify({ 'type': 'command', 'reg': 14,'set':modbus_registor[14] }); /* BIT 12 =0 열림*/
+    const data = JSON.stringify({ 'type': 'command', 'reg': 14,'set':modbus_registor.value[14] }); /* BIT 12 =0 열림*/
     console.log("Query to server")
     console.log(data);
     webSocket.send(data);
 })
 document.getElementById('btnQuery2').addEventListener('click', (e) => {
-  if(modbus_registor[12] & 0x0100 ){
+  if(modbus_registor.value[12] & 0x0100 ){
     document.getElementById('btnQuery2').innerHTML = 'CB1 OFF';
-    modbus_registor[12] &= ~0x100 ;
+    modbus_registor.value[12] &= ~0x100 ;
   }
   else 
   {
     document.getElementById('btnQuery2').innerHTML = 'CB1 ON';
-    modbus_registor[12] |= 0x0100 ;
+    modbus_registor.value[12] |= 0x0100 ;
   }
-    const data = JSON.stringify({ 'type': 'command', 'reg': 12,'set':modbus_registor[12] }); /* BIT 12 =0 열림*/
+    const data = JSON.stringify({ 'type': 'command', 'reg': 12,'set':modbus_registor.value[12] }); /* BIT 12 =0 열림*/
     console.log("Query to server")
     console.log(data);
     webSocket.send(data);
 })
 //충전기정지
 document.getElementById('btnQuery3').addEventListener('click', (e) => {
-  if(modbus_registor[16] & 0x0030 ){
+  if(modbus_registor.value[16] & 0x0030 ){
     document.getElementById('btnQuery3').innerHTML = '충전기운전';
-    modbus_registor[16] &= ~(0x0030) ;
+    modbus_registor.value[16] &= ~(0x0030) ;
   }
   else 
   {
     document.getElementById('btnQuery3').innerHTML = '충전기정지';
-    modbus_registor[16] |= 0x0030 ;
+    modbus_registor.value[16] |= 0x0030 ;
   }
-    const data = JSON.stringify({ 'type': 'command', 'reg': 16,'set':modbus_registor[16] }); 
+    const data = JSON.stringify({ 'type': 'command', 'reg': 16,'set':modbus_registor.value[16] }); 
     console.log("Query to server")
     console.log(data);
     webSocket.send(data);
 })
 document.getElementById('btnQuery4').addEventListener('click', (e) => {
-  if(modbus_registor[13] & 0x0001 ){
+  if(modbus_registor.value[13] & 0x0001 ){
     document.getElementById('btnQuery4').innerHTML = 'CB2 OFF';
-    modbus_registor[13] &= ~(0x0001) ;
+    modbus_registor.value[13] &= ~(0x0001) ;
   }
   else 
   {
     document.getElementById('btnQuery4').innerHTML = 'CB2 ON';
-    modbus_registor[13] |= 0x0001 ;
+    modbus_registor.value[13] |= 0x0001 ;
   }
-    const data = JSON.stringify({ 'type': 'command', 'reg': 13,'set':modbus_registor[13] }); 
+    const data = JSON.stringify({ 'type': 'command', 'reg': 13,'set':modbus_registor.value[13] }); 
     console.log("Query to server")
     console.log(data);
     webSocket.send(data);
 })
 
 webSocket.onmessage = (event) => {
-    //document.getElementById('rand').innerHTML = event.data;
-    console.log(event.data);
-    console.log(event);
     const data = JSON.parse(event.data);
-    //console.log(data);
-    if (data.type == 'time') {
-        // el = document.getElementById('nowTime');
-        // el.innerHTML = 'Time on the Server: ' + data.time;
-        nowTime = new Date(data.time)
-        drawTime.text(nowTime.toLocaleString());
-    }
     if (data.type == 'modbus') {
-        modbus_registor = data;
+        nowTime = new Date(data.time);
+        drawTime.text(nowTime.toLocaleString());
+        console.log(nowTime.toLocaleString());
+        modbus_registor.value = data.value; 
         el = document.getElementById('modbusData');
-        el.innerHTML = 'Received Data: ' + data;
-
         el.innerHTML = 'Received Data: ';
         for(var key in data){
             el.innerHTML += '[' + key +']='+ data[key]+'<br>';
         }
+    }
+    else if (data.type == 'time') {
+        console.log(data.time);
+        nowTime = new Date(1000*data.time);
+        console.log(nowTime.toLocaleString());
+        drawTime.text(nowTime.toLocaleString());
     }
     commandDraw();
 };

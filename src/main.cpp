@@ -33,9 +33,71 @@ const char *ssid = "iftech";
 const char *password = "iftechadmin";
 
 static char TAG[] = "Main";
-StaticJsonDocument<200> doc_tx;
-StaticJsonDocument<200> doc_rx;
+StaticJsonDocument<2000> doc_tx;
+StaticJsonDocument<2000> doc_rx;
 
+int modBusData[] = {
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+};
 /* Style */
 // ;
 String style =
@@ -877,6 +939,11 @@ void littleFsInit()
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
   DeserializationError de_err;
+  String sendString = "";
+  // JsonArray modbusType;
+  JsonArray modbusValues;
+  JsonObject object;
+  time_t nowTime;
   switch (type)
   {
   case WStype_DISCONNECTED:
@@ -888,7 +955,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     USE_SERIAL.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
 
     // send message to client
-    webSocket.sendTXT(num, "Connected");
+    object = doc_tx.to<JsonObject>();
+    object["status"] = "connected";
+    serializeJson(doc_tx, sendString);
+    webSocket.sendTXT(num, sendString);
   }
   break;
   case WStype_TEXT:
@@ -900,11 +970,58 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     }
     else
     {
-      const char *first = doc_rx["guitar"];
+      const char *req_type = doc_rx["type"].as<const char *>();
+      if (!String(req_type).compareTo("command"))
+      {
+        int reg = doc_rx["reg"].as<int>();
+        int set = doc_rx["set"].as<int>();
+        modBusData[reg] = set;
+        ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
+      }
+      else if (!String(req_type).compareTo("timeSet"))
+      {
+        int reg = doc_rx["reg"].as<int>();
+        unsigned long set = doc_rx["set"].as<unsigned long>();
+        struct timeval tmv;
+        tmv.tv_sec = set;
+        tmv.tv_usec = 0;
+        settimeofday(&tmv, NULL);
+        ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
+      }
     }
 
-    USE_SERIAL.printf("[%u] get Text: %s\n", num, payload);
+    time(&nowTime);
+    doc_tx.clear();
 
+    object = doc_tx.to<JsonObject>();
+    object["time"] = nowTime;
+    object["type"] = "modbus";
+    // modbusType = doc_tx.createNestedArray("type");
+    // modbusType.add("modbus");
+    modbusValues = doc_tx.createNestedArray("value");
+    for (int i = 0; i < 60; i++)
+    {
+      modbusValues.add(modBusData[i]);
+    }
+
+    serializeJson(doc_tx, sendString);
+    webSocket.sendTXT(num, sendString);
+
+    USE_SERIAL.printf("[%u] get Text: %s\n", num, payload);
+    USE_SERIAL.printf("[%u] send Text: %s\n", num, sendString);
+    // const message = JSON.parse(data);
+    // //console.log(message);
+    // if (message.type == 'modbus') {
+    //     console.log(message);
+    // }
+    // if (message.type == 'command') {
+    //     modubus_data[message.reg] = message.set;
+    //     console.log(message.set);
+    //     console.log(message.reg);
+    // }
+    // connections.forEach((client) => {
+    //     client.send(JSON.stringify(modubus_data));
+    // })
     // send message to client
     // webSocket.sendTXT(num, "message here");
 
@@ -1196,9 +1313,9 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
   struct tm timeinfo;
   struct timeval tmv;
 
-  timeinfo.tm_year = year;
-  timeinfo.tm_mon = mon;
-  timeinfo.tm_mday = mon;
+  timeinfo.tm_year = year - 1900;
+  timeinfo.tm_mon = mon - 1;
+  timeinfo.tm_mday = day;
   timeinfo.tm_hour = hour;
   timeinfo.tm_min = min;
   timeinfo.tm_sec = sec;
@@ -1224,7 +1341,7 @@ void setup()
   littleFsInit();
   SimpleCLISetUp();
 
-  timeSet(2023, 1, 25, 14, 03, 00);
+  // timeSet(2023, 1, 25, 14, 03, 00);
   time_t now;
   struct tm timeinfo;
   getLocalTime(&timeinfo);
