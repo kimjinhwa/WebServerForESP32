@@ -6,6 +6,9 @@
 #include <ESPmDNS.h>
 #include <Update.h>
 
+#include <WebSocketsServer.h>
+#include <ArduinoJson.h>
+
 // for file system
 #include <esp_spiffs.h>
 #include <dirent.h>
@@ -926,6 +929,35 @@ void setup()
       }(loginIndex)   
     ); });
 
+  server.on("/svg.min.js.map", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/javascript", 
+     [](String s){
+      String readString;
+      struct stat st;
+      stat("/spiffs/svg.min.js.map", &st) ;
+      char* chp= (char*)ps_malloc(st.st_size+1);
+      if(chp == NULL){
+        printf("memory error %d\r\n",st.st_size+1);
+        readString ="Memory Error";
+        return readString ;
+      }
+      fUpdate = fopen("/spiffs/svg.min.js.map", "r");
+      int ch ;
+      int readCount =0;
+      while((ch = fgetc(fUpdate)) != EOF){
+          chp[readCount++]=ch;
+      };
+      chp[readCount]=0x00;
+      readString = chp;
+      //readString = "test";
+      fclose(fUpdate);
+      free(chp);
+      return readString;
+      }(loginIndex)   
+    ); });
+
   server.on("/svg.min.js", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
@@ -934,24 +966,23 @@ void setup()
       String readString;
       struct stat st;
       stat("/spiffs/svg.min.js", &st) ;
-      fUpdate = fopen("/spiffs/svg.min.js", "r");
-
-      int ch ;
-      int readCount =0;
       char* chp= (char*)ps_malloc(st.st_size+1);
       if(chp == NULL){
-        printf("memory error\r\n");
+        printf("memory error %d\r\n",st.st_size+1);
+        readString ="Memory Error";
+        return readString ;
       }
-      else{
-        while((ch = fgetc(fUpdate)) != EOF){
+      fUpdate = fopen("/spiffs/svg.min.js", "r");
+      int ch ;
+      int readCount =0;
+      while((ch = fgetc(fUpdate)) != EOF){
           chp[readCount++]=ch;
       };
       chp[readCount]=0x00;
       readString = chp;
-      }
-      
       //readString = "test";
       fclose(fUpdate);
+      free(chp);
       return readString;
       }(loginIndex)   
     ); });
