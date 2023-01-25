@@ -26,9 +26,16 @@
 #define ETH_MDC_PIN 23
 #define ETH_MDIO_PIN 18
 
+#define USE_SERIAL Serial
+
 const char *host = "esp32";
 const char *ssid = "iftech";
 const char *password = "iftechadmin";
+
+static char TAG[] = "Main";
+StaticJsonDocument<200> doc_tx;
+StaticJsonDocument<200> doc_rx;
+
 /* Style */
 // ;
 String style =
@@ -62,7 +69,7 @@ String fileUpload =
     "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
     "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
     "<label id='file-input' for='file'>   Choose file...</label>"
-    "<input type='submit' class=btn value='Update'>"
+    "<input type='submit' class=btn value='Upload File'>"
     "<br><br>"
     "<div id='prg'></div>"
     "<br><div id='prgbar'><div id='bar'></div></div><br></form>"
@@ -107,7 +114,7 @@ String fileUpload =
 String serverIndex =
     "<script src='/jquery.min.js'></script>"
     "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
-    "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
+    "<input type='file' accept='.bin' name='update' id='file' onchange='sub(this)' style=display:none>"
     "<label id='file-input' for='file'>   Choose file...</label>"
     "<input type='submit' class=btn value='Update'>"
     "<br><br>"
@@ -156,7 +163,9 @@ const char *soft_ap_password = "iftech0273";
 SimpleCLI cli;
 Command cmd_ls_config;
 
+WebSocketsServer webSocket = WebSocketsServer(81);
 WebServer server(80);
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 
 // WiFiServer server(23);
 IPAddress ipddress(192, 168, 0, 57);
@@ -864,6 +873,60 @@ void littleFsInit()
   // printf("\r\nAll Data read done.");
   // printf("All Data read done.\r\n");
 }
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
+  DeserializationError de_err;
+  switch (type)
+  {
+  case WStype_DISCONNECTED:
+    USE_SERIAL.printf("[%u] Disconnected!\n", num);
+    break;
+  case WStype_CONNECTED:
+  {
+    IPAddress ip = webSocket.remoteIP(num);
+    USE_SERIAL.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+
+    // send message to client
+    webSocket.sendTXT(num, "Connected");
+  }
+  break;
+  case WStype_TEXT:
+    de_err = deserializeJson(doc_rx, payload);
+    if (de_err)
+    {
+      USE_SERIAL.printf("");
+      return;
+    }
+    else
+    {
+      const char *first = doc_rx["guitar"];
+    }
+
+    USE_SERIAL.printf("[%u] get Text: %s\n", num, payload);
+
+    // send message to client
+    // webSocket.sendTXT(num, "message here");
+
+    // send data to all connected clients
+    // webSocket.broadcastTXT("message here");
+    break;
+  case WStype_BIN:
+    USE_SERIAL.printf("[%u] get binary length: %u\n", num, length);
+    // hexdump(payload, length);
+
+    // send message to client
+    // webSocket.sendBIN(num, payload, length);
+    break;
+  case WStype_ERROR:
+  case WStype_FRAGMENT_TEXT_START:
+  case WStype_FRAGMENT_BIN_START:
+  case WStype_FRAGMENT:
+  case WStype_FRAGMENT_FIN:
+    break;
+  }
+}
+
 void readInputSerial()
 {
   char readBuf[2];
@@ -896,17 +959,8 @@ void readInputSerial()
 }
 FILE *fUpdate;
 int UpdateSize;
-void setup()
+void serverOnset()
 {
-  Serial.begin(115200);
-  EthLan8720Start();
-  WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
-  WiFi.mode(WIFI_MODE_AP);
-
-  WiFi.softAP(soft_ap_ssid, soft_ap_password);
-  // WiFi.softAPsetHostname(soft_ap_ssid);
-  // WiFi.begin(ssid, password);
-
   if (!MDNS.begin(host))
   { // http://esp32.local
     printf("Error setting up MDNS responder!");
@@ -915,8 +969,6 @@ void setup()
       delay(1000);
     }
   }
-  printf("mDNS responder started");
-
   server.on("/style.css", HTTP_GET, []()
             {
     server.sendHeader("Connection", "close");
@@ -988,6 +1040,23 @@ void setup()
       //readString = "test";
       fclose(fUpdate);
       free(chp);
+      return readString;
+      }(loginIndex)   
+    ); });
+
+  server.on("/index.css", HTTP_GET, []()
+            {
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/css", 
+     [](String s){
+      String readString="";
+      fUpdate = fopen("/spiffs/index.css", "r");
+      char line[64];
+      while (fgets(line, sizeof(line), fUpdate ))
+      {
+        readString +=  line;
+      }
+      fclose(fUpdate);
       return readString;
       }(loginIndex)   
     ); });
@@ -1120,16 +1189,77 @@ void setup()
           }
         }
       });
+}
+void timeSet(int year, int mon, int day, int hour, int min, int sec)
+{
+  time_t now;
+  struct tm timeinfo;
+  struct timeval tmv;
+
+  timeinfo.tm_year = year;
+  timeinfo.tm_mon = mon;
+  timeinfo.tm_mday = mon;
+  timeinfo.tm_hour = hour;
+  timeinfo.tm_min = min;
+  timeinfo.tm_sec = sec;
+  tmv.tv_sec = mktime(&timeinfo);
+  tmv.tv_usec = 0;
+  settimeofday(&tmv, NULL);
+}
+void setup()
+{
+  Serial.begin(115200);
+  EthLan8720Start();
+  WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
+  WiFi.mode(WIFI_MODE_AP);
+  WiFi.softAP(soft_ap_ssid, soft_ap_password);
+  // WiFi.softAPsetHostname(soft_ap_ssid);
+  // WiFi.begin(ssid, password);
+
+  printf("mDNS responder started");
+
+  serverOnset();
   server.begin();
 
   littleFsInit();
   SimpleCLISetUp();
-}
 
+  timeSet(2023, 1, 25, 14, 03, 00);
+  time_t now;
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  char strftime_buf[64];
+  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  ESP_LOGD(TAG, "The current date/time in is: %s", strftime_buf);
+  ESP_LOGD(TAG, "\nWeb Server Program Started");
+
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+}
+unsigned long previousmills = 0;
+int interval = 2000;
 void loop()
 {
   server.handleClient();
+  webSocket.loop();
   if (Serial.available())
     readInputSerial();
+  unsigned long now = millis();
+  String sendString = "";
+
+  time_t nowTime;
+  if (now - previousmills > interval)
+  {
+    JsonObject object = doc_tx.to<JsonObject>();
+    time(&nowTime);
+    object["type"] = "time";
+    object["time"] = nowTime;
+    // object["rand2"]=random(100);
+    serializeJson(doc_tx, sendString);
+
+    // ESP_LOGD(TAG, "\n%s", sendString);
+    webSocket.broadcastTXT(sendString);
+    previousmills = now;
+  }
   delay(1);
 }

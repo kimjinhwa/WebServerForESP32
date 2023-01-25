@@ -573,7 +573,7 @@ function commandDraw() {
 
 }
 
-const webSocket = new WebSocket('ws://172.20.186.38:8080/');
+const webSocket = new WebSocket('ws://'+ document.location.hostname+ ':81/');
 
 let el;
 // document.getElementById('btnQuery1').addEventListener('click', (e) => {
@@ -676,8 +676,8 @@ document.getElementById('btnQuery4').addEventListener('click', (e) => {
 
 webSocket.onmessage = (event) => {
     //document.getElementById('rand').innerHTML = event.data;
-    //console.log(event.data);
-    //console.log(event);
+    console.log(event.data);
+    console.log(event);
     const data = JSON.parse(event.data);
     //console.log(data);
     if (data.type == 'time') {
