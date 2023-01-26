@@ -7,3 +7,6 @@ Using ESP32 , webserver
 2. Upload html list.  
   * index.html  
   * 
+3. For Debugging  
+ * nc -ul -p 162  or 
+ * nc -ul -p 162  | hexdump -C

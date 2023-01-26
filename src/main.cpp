@@ -1,10 +1,12 @@
 #include <Arduino.h>
+#include <stdio.h>
 #include <ETH.h>
 #include <Wifi.h>
 #include <WiFiClient.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Update.h>
+#include <AsyncUDP.h>
 
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -31,6 +33,7 @@
 const char *host = "esp32";
 const char *ssid = "iftech";
 const char *password = "iftechadmin";
+AsyncUDP udp;
 
 static char TAG[] = "Main";
 StaticJsonDocument<2000> doc_tx;
@@ -563,123 +566,13 @@ out_error:
   return -1;
 }
 
-//----------------------------------
-// void mkdirTest(char *dirname)
-// {
-//   printf("============================\n");
-//   printf("==== Make new directory ====\n");
-//   printf("============================\n");
-//   printf("  dir: \"%s\"\n", dirname);
-
-//   int res;
-//   struct stat st = {0};
-//   char nname[80];
-
-//   if (stat(dirname, &st) == -1)
-//   {
-//     res = mkdir(dirname, 0777);
-//     if (res != 0)
-//     {
-//       printf("  Error creating directory (%d) %s\n", errno, strerror(errno));
-//       printf("\n");
-//       return;
-//     }
-//     printf("  Directory created\n");
-
-//     printf("  Copy file from root to new directory...\n");
-//     sprintf(nname, "%s/test.txt.copy", dirname);
-//     res = file_copy(nname, "/spiffs/test.txt");
-//     if (res != 0)
-//     {
-//       printf("  Error copying file (%d)\n", res);
-//     }
-
-//     printf("  List the new directory\n");
-//     list(dirname, NULL);
-//     vTaskDelay(500 / portTICK_RATE_MS);
-
-//     printf("  List root directory, the \"newdir\" should be listed\n");
-//     list("/spiffs/", NULL);
-//     vTaskDelay(1000 / portTICK_RATE_MS);
-
-//     printf("  Try to remove non empty directory...\n");
-//     res = rmdir(dirname);
-//     if (res != 0)
-//     {
-//       printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
-//     }
-
-//     printf("  Removing file from new directory...\n");
-//     res = remove(nname);
-//     if (res != 0)
-//     {
-//       printf("  Error removing file (%d) %s\n", errno, strerror(errno));
-//     }
-
-//     printf("  Removing directory...\n");
-//     res = rmdir(dirname);
-//     if (res != 0)
-//     {
-//       printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
-//     }
-
-//     printf("  List root directory, the \"newdir\" should be gone\n");
-//     list("/spiffs/", NULL);
-//     vTaskDelay(1000 / portTICK_RATE_MS);
-//   }
-//   else
-//   {
-//     printf("  Directory already exists, removing\n");
-//     res = rmdir(dirname);
-//     if (res != 0)
-//     {
-//       printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
-//     }
-//   }
-
-//   printf("\n");
-// }
 void ls_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
 
-  // DIR *dir = opendir("/spiffs");
-  // struct stat st;
-  // if (dir == NULL)
-  //   return;
-  // printf("\tFILE\t\t\tSIZE\r\n");
-  // while (true)
-  // {
-  //   struct dirent *de = readdir(dir);
-  //   if (!de)
-  //     break;
-  //   String filename = "";
-  //   filename = "/spiffs/" + String(de->d_name);
-  //   if (stat(filename.c_str(), &st) == 0)
-  //     printf("\t%s\t%9d\r\n", de->d_name, st.st_size);
-  //   else
-  //     printf("Fail\r\n");
-  // }
-  // closedir(dir);
   listDir("/spiffs/", NULL);
 }
 
-// void mkdir_configCallback(cmd *cmdPtr)
-// {
-//   Command cmd(cmdPtr);
-//   Argument arg = cmd.getArgument(0);
-//   String argVal = arg.getValue();
-//   printf("\r\n");
-
-//   if (argVal.length() == 0)
-//     return;
-//   argVal = String("/spiffs/") + argVal;
-//   mkdirTest((char *)argVal.c_str());
-//   // if (mkdir(arg(char *)Val.c_str(),0777) == -1)
-//   //   printf("Faild to crete dir %s\n", argVal.c_str());
-//   // else
-//   //   printf("directrory was create %s\n", argVal.c_str());
-// }
 void rm_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
@@ -828,36 +721,13 @@ void EthLan8720Start()
     printf("\nconnecting...");
     delay(1000);
   }
-  printf("\nConnected");
+  printf("\nConnected\n");
   // server.begin();
   // server.setNoDelay(true);
-  printf("Ready! Use 'telnet ");
+  printf("\nReady! Use 'telnet ");
   printf(WiFi.localIP().toString().c_str());
   printf(" 23' to connect");
 }
-// void writeHellowTofile()
-// {
-//   struct stat st;
-//   FILE *f;
-//   if (stat("/spiffs/hello.txt", &st) == 0)
-//   {
-//     // Delete it if it exists
-//     // unlink("/spiffs/foo.txt");
-//     f = fopen("/spiffs/hello.txt", "a+");
-//   }
-//   else
-//   {
-//     f = fopen("/spiffs/hello.txt", "w+");
-//   }
-
-//   if (f == NULL)
-//   {
-//     printf("\r\nFailed to open file for writing");
-//     return;
-//   }
-//   fprintf(f, "Hello World!\n");
-//   fclose(f);
-// }
 void littleFsInit()
 {
   esp_vfs_spiffs_conf_t conf = {
@@ -906,34 +776,6 @@ void littleFsInit()
   {
     printf("\r\nPartition size: total: %d, used: %d", total, used);
   }
-
-  // printf("\r\nOpening file");
-  // Check if destination file exists before renaming
-
-  // writeHellowTofile();
-  // writeHellowTofile();
-  //  FILE *f;
-
-  // printf("File written\r\n");
-  // printf("File written\r\n");
-  // // Open renamed file for reading
-  // printf("Reading file\r\n");
-  // f = fopen("/spiffs/hello.txt", "r");
-  // if (f == NULL)
-  // {
-  //   printf("Failed to open file for reading");
-  //   return;
-  // }
-  // char line[64];
-  // while (fgets(line, sizeof(line), f))
-  // {
-  //   printf("%s", line);
-  // }
-
-  // fclose(f);
-  // printf("\r\nAll Data read done.");
-  // printf("\r\nAll Data read done.");
-  // printf("All Data read done.\r\n");
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
@@ -947,12 +789,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   switch (type)
   {
   case WStype_DISCONNECTED:
-    USE_SERIAL.printf("[%u] Disconnected!\n", num);
+    printf("[%u] Disconnected!\n", num);
     break;
   case WStype_CONNECTED:
   {
     IPAddress ip = webSocket.remoteIP(num);
-    USE_SERIAL.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+    printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
 
     // send message to client
     object = doc_tx.to<JsonObject>();
@@ -965,7 +807,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     de_err = deserializeJson(doc_rx, payload);
     if (de_err)
     {
-      USE_SERIAL.printf("");
+      printf("");
       return;
     }
     else
@@ -976,7 +818,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         int reg = doc_rx["reg"].as<int>();
         int set = doc_rx["set"].as<int>();
         modBusData[reg] = set;
-        ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
+        printf("\nreq_type=%s reg=%d set=%d", req_type, reg, set);
       }
       else if (!String(req_type).compareTo("timeSet"))
       {
@@ -1007,8 +849,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     serializeJson(doc_tx, sendString);
     webSocket.sendTXT(num, sendString);
 
-    USE_SERIAL.printf("[%u] get Text: %s\n", num, payload);
-    USE_SERIAL.printf("[%u] send Text: %s\n", num, sendString);
+    printf("[%u] get Text: %s\n", num, payload);
+    printf("[%u] send Text: %s\n", num, sendString);
     // const message = JSON.parse(data);
     // //console.log(message);
     // if (message.type == 'modbus') {
@@ -1029,7 +871,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     // webSocket.broadcastTXT("message here");
     break;
   case WStype_BIN:
-    USE_SERIAL.printf("[%u] get binary length: %u\n", num, length);
+    printf("[%u] get binary length: %u\n", num, length);
     // hexdump(payload, length);
 
     // send message to client
@@ -1054,20 +896,18 @@ void readInputSerial()
     {
       if (Serial.readBytes(readBuf, 1))
       {
-        Serial.printf("%c", readBuf[0]);
+        printf("%c", readBuf[0]);
         input += String(readBuf);
       }
       if (readBuf[0] == '\n' || readBuf[0] == '\r')
       {
-        // printf("inputString is ");
-        // printf(input);
         cli.parse(input);
         while (Serial.available())
           Serial.readBytes(readBuf, 1);
         // Serial.readString();
         // Serial.setTimeout(0);
         input = "";
-        printf("# ");
+        printf("\n# ");
         break;
       }
     }
@@ -1237,7 +1077,7 @@ void serverOnset()
       {
     server.sendHeader("Connection", "close");
     server.send(200, "text/plain", /*(update.haserror()) ? "fail" :*/ "OK");
-    Serial.printf("Finish"); },
+    printf("Finish"); },
       []()
       {
         HTTPUpload &upload = server.upload();
@@ -1255,17 +1095,15 @@ void serverOnset()
         {
           fwrite((char *)upload.buf, 1, upload.currentSize, fUpdate);
           UpdateSize += upload.currentSize;
-          Serial.printf(".");
-          // Serial.printf("Update progress.: %s %d %d/n", upload.filename.c_str(), upload.currentSize, upload.totalSize);
+          printf(".");
         }
         else if (upload.status == UPLOAD_FILE_END)
         {
-          // Serial.printf("Update end....: %s length = %d\n", upload.filename.c_str(), UpdateSize);
           fclose(fUpdate);
-          Serial.printf("Update END....File name : %s\r\n", upload.filename.c_str());
-          Serial.printf("name : %s\r\n", upload.name.c_str());
-          Serial.printf("type: %s\r\n", upload.type.c_str());
-          Serial.printf("size: %d\r\n", upload.totalSize);
+          printf("Update END....File name : %s\r\n", upload.filename.c_str());
+          printf("name : %s\r\n", upload.name.c_str());
+          printf("type: %s\r\n", upload.type.c_str());
+          printf("size: %d\r\n", upload.totalSize);
           Update.end(false);
         }
       });
@@ -1280,7 +1118,7 @@ void serverOnset()
         HTTPUpload &upload = server.upload();
         if (upload.status == UPLOAD_FILE_START)
         {
-          Serial.printf("Update: %s\n", upload.filename.c_str());
+          printf("Update: %s\n", upload.filename.c_str());
           if (!Update.begin(UPDATE_SIZE_UNKNOWN))
           { // start with max available size
             Update.printError(Serial);
@@ -1298,7 +1136,7 @@ void serverOnset()
         {
           if (Update.end(true))
           { // true to set the size to the current progress
-            Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+            printf("Update Success: %u\nRebooting...\n", upload.totalSize);
           }
           else
           {
@@ -1322,6 +1160,12 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
   tmv.tv_sec = mktime(&timeinfo);
   tmv.tv_usec = 0;
   settimeofday(&tmv, NULL);
+}
+
+static int writeToUdp(void *cookie, const char *data, int size)
+{
+  udp.broadcastTo(data, 1234);
+  return 0;
 }
 void setup()
 {
@@ -1347,16 +1191,21 @@ void setup()
   getLocalTime(&timeinfo);
   char strftime_buf[64];
   strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-  ESP_LOGD(TAG, "The current date/time in is: %s", strftime_buf);
-  ESP_LOGD(TAG, "\nWeb Server Program Started");
+  printf("The current date/time in is: %s", strftime_buf);
+  printf("\nWeb Server Program Started");
 
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
+  //stdout = fwopen(NULL, &writeToUdp);
+  stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
 }
 unsigned long previousmills = 0;
 int interval = 2000;
+
 void loop()
 {
+  // esp_log_level_set(TAG, ESP_LOG_DEBUG);
+  // esp_log_set_vprintf(&vprintf_udp);
   server.handleClient();
   webSocket.loop();
   if (Serial.available())
