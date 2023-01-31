@@ -1,0 +1,81 @@
+
+  // doc_tx["time"] = 1351824120;
+  // doc_tx["type"] = "modbus";
+  // JsonArray modbusValues = doc_tx.createNestedArray("value");
+  //  for (int i = 0; i < 60; i++)
+  //  {
+  //    modbusValues.add(modBusData[i]);
+  //  }
+
+  // String des;
+  // serializeJson(doc_tx, des);
+  // Serial.println(des);
+  // FILE *fp = fopen("/spiffs/ipaddress.txt", "w+");
+  // // serializeJson(doc_tx, fp);
+
+  // fwrite(des.c_str(), sizeof(byte), des.length(), fp);
+  // fclose(fp);
+
+  // serializeJson(doc_tx, Serial);
+  // Serial.println();
+
+// Client.printf("\r\nipaddress %s", ipaddress.toString());
+// Client.printf("gateway %s", gateway.toString());
+// Client.printf("subnetmask %s", subnetmask.toString());
+// Client.printf("dns1 %s", dns1.toString());
+// Client.printf("dns2 %s", dns2.toString());
+// Client.printf("websocketserver %s", websocketserver.toString());
+// Client.printf("%d", webSocketPort);
+  // struct timeval tmv;
+  // struct tm *tm_info;
+  // tmv.tv_sec = logData.logTime;
+  // tmv.tv_usec = 0;
+  // settimeofday(&tmv, NULL);
+  // tm_info = localtime(&sb.st_mtime);
+  // strftime(tbuffer, 80, "%d/%m/%Y %R", tm_info);
+
+  // // FILE *file = fopen("/spiffs/eventLog.json", "r");
+  // ifstream fin;
+  // char line[120];
+  // fin.open("/spiffs/eventLog.json");
+  // if (!fin.is_open())
+  // {
+  //   Serial.println("There was an error opening the file");
+  //   return;
+  // };
+
+  // while (fin.getline(line, 100))
+  // {
+
+  //   // Print line (read from file) in Console
+  //   Serial.print(line);
+  // }
+  // fin.close();
+  // // File file = LittleFS.open("/spiffs/eventLog.json", "r", true);
+  //  SPIFFSFS vimpl;
+  //  vimpl.open("/spiffs/eventLog.json","r",true);
+  //  File file (vimpl.open("/spiffs/eventLog.json","r",true));//= File(new VFSImpl.open("/spiffs/eventLog.json","r",true)); //SD.open("/spiffs/eventLog.json");
+  //  if (!file)
+  //  {
+  //    Serial.println("There was an error opening the file");
+  //    return;
+  //  }
+  //  else
+  //  {
+  //    //   Serial.println("File opened!");
+
+  //   //   StaticJsonDocument<512> doc;
+
+  //   //   DeserializationError error = deserializeJson(doc, file);
+  //   //   if (error)
+  //   //   {
+  //   //     Serial.println("error...");
+  //   //   }
+  //   //   else
+  //   //   {
+  //   //     serializeJson(doc_tx, Serial);
+  //   //     Serial.println();
+  //   //   }
+  //   //   Serial.println("");
+  // }
+  // // fclose(file);

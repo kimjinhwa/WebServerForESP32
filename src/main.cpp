@@ -19,8 +19,10 @@
 #include <sys/stat.h>
 
 #include <SimpleCLI.h>
+#include "ModbusClientRTU.h"
 
 #include "resource.h"
+#include "modbus01.h"
 
 #define ETH_PHY_TYPE ETH_PHY_LAN8720
 #define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN
@@ -31,7 +33,6 @@
 #define ETH_MDIO_PIN 18
 
 #define USE_SERIAL Serial
-
 typedef struct
 {
   uint32_t IPADDRESS;
@@ -42,6 +43,11 @@ typedef struct
   uint32_t DNS2;
   uint16_t WEBSERVERPORT;
 } stIpaddress;
+typedef struct
+{
+  uint32_t logTime;
+  uint16_t modBusData[60];
+} logData_t;
 
 const char *host = "esp32";
 const char *ssid = "iftech";
@@ -456,8 +462,10 @@ void rm_configCallback(cmd *cmdPtr)
 void readFromFile(String filename)
 {
   FILE *f;
+#ifndef Client
   if (!Client.connected())
     return;
+#endif
   f = fopen(filename.c_str(), "r");
   if (f == NULL)
   {
@@ -869,6 +877,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     // send message to client
     object = doc_tx.to<JsonObject>();
     object["status"] = "connected";
+
     serializeJson(doc_tx, sendString);
     webSocket.sendTXT(num, sendString);
   }
@@ -1241,8 +1250,10 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
 static int writeToUdp(void *cookie, const char *data, int size)
 {
   // udp.broadcastTo(data, 1234);
-  if (Client.connected())
+  if (Client.connected()){
     Client.printf(data);
+    Client.flush();
+  }
   return 0;
 }
 void telnetServerCheckClient()
@@ -1258,9 +1269,9 @@ void telnetServerCheckClient()
   { // check if there are any new clients
     Client = telnetServer.available();
     if (!Client)
-      Serial.println("available broken");
-    Serial.print("New client: ");
-    Serial.println(Client.remoteIP());
+      printf("available broken");
+    printf("New client: ");
+    printf(Client.remoteIP().toString().c_str());
   }
 
   if (Client && Client.connected())
@@ -1302,17 +1313,36 @@ void readnWriteEEProm()
   websocketserver = IPAddress(ipAddress_struct.WEBSOCKETSERVER);
   webSocketPort = ipAddress_struct.WEBSERVERPORT;
 
-  Serial.printf("\n\ripaddress %s", ipaddress.toString());
-  Serial.printf("\n\rgateway %s", gateway.toString());
-  Serial.printf("\n\rsubnetmask %s", subnetmask.toString());
-  Serial.printf("\n\rdns1 %s", dns1.toString());
-  Serial.printf("\n\rdns2 %s", dns2.toString());
-  Serial.printf("\n\rwebsocketserver %s", websocketserver.toString());
-  Serial.printf("\n\rwebSocketPort %d", webSocketPort);
+  // Serial.printf("\n\ripaddress %s", ipaddress.toString());
+  // Serial.printf("\n\rgateway %s", gateway.toString());
+  // Serial.printf("\n\rsubnetmask %s", subnetmask.toString());
+  // Serial.printf("\n\rdns1 %s", dns1.toString());
+  // Serial.printf("\n\rdns2 %s", dns2.toString());
+  // Serial.printf("\n\rwebsocketserver %s", websocketserver.toString());
+  // Serial.printf("\n\rwebSocketPort %d", webSocketPort);
+}
+void logWrite()
+{
+  logData_t logData;
+  logData.logTime = 1351824120;
+  for (int ipos = 0; ipos < 60; ipos++)
+    logData.modBusData[ipos] = modBusData[ipos];
+  FILE *fp = fopen("/spiffs/logFile.bin", "a+");
+  fwrite((byte *)&logData, sizeof(byte), sizeof(logData_t), fp);
+  fclose(fp);
+}
+void logfileRead()
+{
+  logData_t logData;
+  for (int ipos = 0; ipos < 60; ipos++)
+    logData.modBusData[ipos] = modBusData[ipos];
+  FILE *fp = fopen("/spiffs/logFile.bin", "a+");
+  fread((byte *)&logData, sizeof(byte), sizeof(logData_t), fp);
+  fclose(fp);
 }
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
   EEPROM.begin(100);
   littleFsInit();
   readnWriteEEProm();
@@ -1344,7 +1374,11 @@ void setup()
   webSocket.onEvent(webSocketEvent);
   // stdout = fwopen(NULL, &writeToUdp);
   stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
+
+  modBusRtuSetup();
 }
+
+
 unsigned long previousmills = 0;
 int interval = 2000;
 void loop()
@@ -1370,14 +1404,8 @@ void loop()
     // ESP_LOGD(TAG, "\n%s", sendString);
     webSocket.broadcastTXT(sendString);
     previousmills = now;
+    // modbus request
+    modbusRequest();
   }
   delay(1);
 }
-
-// Client.printf("\r\nipaddress %s", ipaddress.toString());
-// Client.printf("gateway %s", gateway.toString());
-// Client.printf("subnetmask %s", subnetmask.toString());
-// Client.printf("dns1 %s", dns1.toString());
-// Client.printf("dns2 %s", dns2.toString());
-// Client.printf("websocketserver %s", websocketserver.toString());
-// Client.printf("%d", webSocketPort);
