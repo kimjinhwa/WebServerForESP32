@@ -9,6 +9,8 @@
 #include <Update.h>
 #include <AsyncUDP.h>
 #include <EEPROM.h>
+#include <ThreeWire.h>
+#include <RtcDS1302.h>
 
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -19,9 +21,10 @@
 #include <sys/stat.h>
 
 #include <SimpleCLI.h>
+#include <mainGrobaldef.h>
 #include "ModbusClientRTU.h"
 
-#include "resource.h"
+#include "main.h"
 #include "modbus01.h"
 
 #define ETH_PHY_TYPE ETH_PHY_LAN8720
@@ -43,11 +46,6 @@ typedef struct
   uint32_t DNS2;
   uint16_t WEBSERVERPORT;
 } stIpaddress;
-typedef struct
-{
-  uint32_t logTime;
-  uint16_t modBusData[60];
-} logData_t;
 
 const char *host = "esp32";
 const char *ssid = "iftech";
@@ -57,13 +55,17 @@ const char *password = "iftechadmin";
 static char TAG[] = "Main";
 StaticJsonDocument<2000> doc_tx;
 StaticJsonDocument<2000> doc_rx;
-
+TaskHandle_t *h_pxModbus;
 /* setup function */
 const char *soft_ap_ssid = "CHA_IFT";
 const char *soft_ap_password = "iftech0273";
 
 SimpleCLI cli;
 Command cmd_ls_config;
+SemaphoreHandle_t xMutex;
+
+ThreeWire myWire(15, 32, 33); // IO, SCLK, CE
+RtcDS1302<ThreeWire> Rtc(myWire);
 
 WebSocketsServer webSocket = WebSocketsServer(81);
 WebServer webServer(80);
@@ -685,6 +687,7 @@ void df_configCallback(cmd *cmdPtr)
   Client.printf("|Psram    |       |          |   %d | ESP.PsramSize   |\r\n", ESP.getPsramSize());
   Client.printf("|Free Psrm|       |          |   %d | ESP.FreePsram   |\r\n", ESP.getFreePsram());
   Client.printf("|UsedPsram|       |          |   %d | Psram - FreeRam |\r\n", ESP.getPsramSize() - ESP.getFreePsram());
+  Client.printf("|Modbus Threed heep free     |   %d | Psram - FreeRam |\r\n", uxTaskGetStackHighWaterMark(h_pxModbus));
 }
 
 void errorCallback(cmd_error *errorPtr)
@@ -896,7 +899,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       {
         int reg = doc_rx["reg"].as<int>();
         int set = doc_rx["set"].as<int>();
-        modBusData[reg] = set;
+
+        xSemaphoreTake(xMutex, portMAX_DELAY);
+        modBusData.Data[reg] = set;
+        xSemaphoreGive(xMutex);
         printf("\r\nreq_type=%s reg=%d set=%d", req_type, reg, set);
       }
       else if (!String(req_type).compareTo("timeSet"))
@@ -920,10 +926,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     // modbusType = doc_tx.createNestedArray("type");
     // modbusType.add("modbus");
     modbusValues = doc_tx.createNestedArray("value");
+    xSemaphoreTake(xMutex, portMAX_DELAY);
     for (int i = 0; i < 60; i++)
     {
-      modbusValues.add(modBusData[i]);
+      modbusValues.add(modBusData.Data[i]);
     }
+    xSemaphoreGive(xMutex);
 
     serializeJson(doc_tx, sendString);
     webSocket.sendTXT(num, sendString);
@@ -1250,7 +1258,8 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
 static int writeToUdp(void *cookie, const char *data, int size)
 {
   // udp.broadcastTo(data, 1234);
-  if (Client.connected()){
+  if (Client.connected())
+  {
     Client.printf(data);
     Client.flush();
   }
@@ -1323,27 +1332,98 @@ void readnWriteEEProm()
 }
 void logWrite()
 {
-  logData_t logData;
-  logData.logTime = 1351824120;
-  for (int ipos = 0; ipos < 60; ipos++)
-    logData.modBusData[ipos] = modBusData[ipos];
+  // modBusData_t logData= {
+  // logData.logTime = 1351824120;
+  // for (int ipos = 0; ipos < 60; ipos++)
+  //   logData.modBusData[ipos] = modBusData[ipos];
   FILE *fp = fopen("/spiffs/logFile.bin", "a+");
-  fwrite((byte *)&logData, sizeof(byte), sizeof(logData_t), fp);
+  xSemaphoreTake(xMutex, portMAX_DELAY);
+  fwrite((byte *)&modBusData, sizeof(byte), sizeof(modBusData_t), fp);
+  xSemaphoreGive(xMutex);
   fclose(fp);
 }
 void logfileRead()
 {
-  logData_t logData;
-  for (int ipos = 0; ipos < 60; ipos++)
-    logData.modBusData[ipos] = modBusData[ipos];
+  modBusData_t logData;
+  // for (int ipos = 0; ipos < 60; ipos++)
+  //   logData.Data[ipos] = modBusData.Data[ipos];
   FILE *fp = fopen("/spiffs/logFile.bin", "a+");
-  fread((byte *)&logData, sizeof(byte), sizeof(logData_t), fp);
+  fread((byte *)&logData, sizeof(byte), sizeof(modBusData_t), fp);
   fclose(fp);
+}
+
+#define countof(a) (sizeof(a) / sizeof(a[0]))
+void printDateTime(const RtcDateTime &dt)
+{
+  char datestring[20];
+
+  snprintf_P(datestring,
+             countof(datestring),
+             PSTR("%02u/%02u/%04u %02u:%02u:%02u"),
+             dt.Month(),
+             dt.Day(),
+             dt.Year(),
+             dt.Hour(),
+             dt.Minute(),
+             dt.Second());
+  Serial.print(datestring);
+}
+void setRtc()
+{
+  Rtc.Begin();
+
+  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+  printDateTime(compiled);
+  Serial.println();
+  if (!Rtc.IsDateTimeValid())
+  {
+    // Common Causes:
+    //    1) first time you ran and the device wasn't running yet
+    //    2) the battery on the device is low or even missing
+
+    Serial.println("RTC lost confidence in the DateTime!");
+    Rtc.SetDateTime(compiled);
+  }
+  if (Rtc.GetIsWriteProtected())
+  {
+    Serial.println("RTC was write protected, enabling writing now");
+    Rtc.SetIsWriteProtected(false);
+  }
+  if (!Rtc.GetIsRunning())
+  {
+    Serial.println("RTC was not actively running, starting now");
+    Rtc.SetIsRunning(true);
+  }
+
+  RtcDateTime now = Rtc.GetDateTime();
+  if (now < compiled)
+  {
+    Serial.println("RTC is older than compile time!  (Updating DateTime)");
+    Rtc.SetDateTime(compiled);
+  }
+  else if (now > compiled)
+  {
+    Serial.println("RTC is newer than compile time. (this is expected)");
+  }
+  else if (now == compiled)
+  {
+    Serial.println("RTC is the same as compile time! (not expected but all is fine)");
+  }
+  printDateTime(now);
+  Serial.println();
+  struct timeval tmv;
+  tmv.tv_sec = now.Epoch32Time();
+  tmv.tv_usec = 0;
+  settimeofday(&tmv, NULL);
 }
 void setup()
 {
-  Serial.begin(9600);
+  pinMode(33, OUTPUT);
+  // Serial.begin(9600);
+  Serial.begin(115200);
   EEPROM.begin(100);
+  setRtc();
+
   littleFsInit();
   readnWriteEEProm();
   EthLan8720Start();
@@ -1362,22 +1442,22 @@ void setup()
   SimpleCLISetUp();
 
   // timeSet(2023, 1, 25, 14, 03, 00);
-  time_t now;
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-  char strftime_buf[64];
-  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-  printf("\r\nThe current date/time in is: %s", strftime_buf);
-  printf("\r\nWeb webServer Program Started");
+  // time_t now;
+  // struct tm timeinfo;
+  // getLocalTime(&timeinfo);
+  // char strftime_buf[64];
+  // strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  // printf("\r\nThe current date/time in is: %s", strftime_buf);
+  // printf("\r\nWeb webServer Program Started");
 
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
   // stdout = fwopen(NULL, &writeToUdp);
   stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
 
-  modBusRtuSetup();
+  xMutex = xSemaphoreCreateMutex();
+  xTaskCreate(modbusRequest, "modbus", 2000, NULL, 1, h_pxModbus);
 }
-
 
 unsigned long previousmills = 0;
 int interval = 2000;
@@ -1405,7 +1485,16 @@ void loop()
     webSocket.broadcastTXT(sendString);
     previousmills = now;
     // modbus request
-    modbusRequest();
+    // modbusRequest();
   }
   delay(1);
 }
+
+    // RtcDateTime now = Rtc.GetDateTime();
+    // printDateTime(now);
+    // Serial.println();
+    // struct tm timeinfo;
+    // getLocalTime(&timeinfo);
+    // char strftime_buf[64];
+    // strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+    // Serial.printf("\r\nThe current date/time in is: %s", strftime_buf);

@@ -79,3 +79,44 @@
   //   //   Serial.println("");
   // }
   // // fclose(file);
+  std::mutex serial_mtx;
+
+void setup() {
+  Serial.begin(112500);
+  xTaskCreate(vTask1, "Task 1", 10000, NULL, 1, NULL);
+  xTaskCreate(vTask2, "Task 2", 10000, NULL, 1, NULL);
+}
+
+void loop() {}
+
+void vTask1(void *pvParameters) {
+  for (;;) {
+    std::lock_guard<std::mutex> lck(serial_mtx);
+    Serial.println("Task 1 is running");
+  }
+}
+
+void vTask2(void *pvParameters) {
+  for (;;) {
+    std::lock_guard<std::mutex> lck(serial_mtx);
+    Serial.println("Task 2 is running");
+  }
+}
+// int log_printf_udp(const char *format, ...);
+// int vprintf_udp(const char *fmt, va_list args);
+// int log_printf_udp(const char *format, ...)
+// {
+//   int len;
+//   va_list arg;
+//   va_start(arg, format);
+//   len = vprintf_udp(format, arg);
+//   va_end(arg);
+//   return len;
+// };
+// int vprintf_udp(const char *fmt, va_list args)
+// {
+//   char sendBuf[1024];
+//   sprintf(sendBuf, fmt, args);
+//   udp.broadcastTo(sendBuf, 1234);
+//   return 0;
+// };

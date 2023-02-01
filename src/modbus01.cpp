@@ -4,6 +4,7 @@
 #include <Ethernet.h>
 #include <Wifi.h>
 #include <WiFiClient.h>
+#include "mainGrobaldef.h"
 #include "modbus01.h"
 // Modbus bridge include
 // #include "ModbusBridgeWiFi.h"
@@ -15,9 +16,10 @@
 #define READ_INTERVAL 5000
 bool data_ready = false;
 
-uint16_t values[NUM_VALUES];
 uint32_t request_time;
 ModbusClientRTU MB(Serial);
+
+extern modBusData_t modBusData;
 
 // extern WiFiClient Client;
 //  static int writeToUdp(void *cookie, const char *data, int size)
@@ -33,19 +35,21 @@ ModbusClientRTU MB(Serial);
 // Define an onData handler function to receive the regular responses
 // Arguments are received response message and the request's token
 extern WiFiClient Client;
+extern SemaphoreHandle_t xMutex;
 void handleData(ModbusMessage response, uint32_t token)
 {
     // First value is on pos 3, after server ID, function code and length byte
     uint16_t offs = 3;
     // The device has values all as IEEE754 float32 in two consecutive registers
     // Read the requested in a loop
-    // if (Client.connected())
-    //     Client.printf("data Received\r\n");
+    if (Client.connected())
+        Client.printf("data Received\r\n");
     for (uint8_t i = 0; i < NUM_VALUES; ++i)
     {
-        //offs = response.get(offs, values[i]);
-        offs = response.get(offs, values[i]);
-        //Client.printf("%x ",values[i]);
+        xSemaphoreTake(xMutex, portMAX_DELAY); 
+        offs = response.get(offs, modBusData.Data[i]);
+        xSemaphoreGive(xMutex);
+        Client.printf("%x ",modBusData.Data[i]);
     }
     // Signal "data is complete"
     request_time = token;
@@ -70,17 +74,24 @@ void modBusRtuSetup()
     MB.setTimeout(2000);
     MB.begin();
 }
-void modbusRequest()
+void modbusRequest(void *parameter)
 {
-    data_ready = false;
     // Issue the request
     // if (Client.connected())
     //     Client.printf("\r\nData send...");
-    Error err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
-    if (err != SUCCESS)
+    int LEDSTATUS=1;
+    modBusRtuSetup();
+    while (1)
     {
-        ModbusError me(err);
-        // LOG_E("Error response: %02X - %s\n", (int)me, (const char *)me);
+        data_ready = false;
+        Error err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
+        if (err != SUCCESS)
+        {
+            ModbusError me(err);
+            // LOG_E("Error response: %02X - %s\n", (int)me, (const char *)me);
+        }
+        vTaskDelay(1000);
+        digitalWrite(33,LEDSTATUS= !LEDSTATUS);
     }
 }
 // uint16_t port = 502;                       // port of modbus server
