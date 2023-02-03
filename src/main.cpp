@@ -28,7 +28,8 @@
 #include "modbus01.h"
 
 #define ETH_PHY_TYPE ETH_PHY_LAN8720
-#define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN
+//
+// #define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN
 #define ETH_POWER_PIN 4
 #define ETH_TYPE ETH_PHY_LAN8720
 #define ETH_ADDR 1
@@ -44,12 +45,19 @@ typedef struct
   uint32_t WEBSOCKETSERVER;
   uint32_t DNS1;
   uint32_t DNS2;
+  uint32_t NTP_1;
+  uint32_t NTP_2;
   uint16_t WEBSERVERPORT;
-} stIpaddress;
+  bool ntpuse;
+} nvsSystemSet;
 
 const char *host = "esp32";
 const char *ssid = "iftech";
 const char *password = "iftechadmin";
+const long gmtOffset_sec = 9 * 3600;
+const int daylightOffset_sec = 3600;
+
+nvsSystemSet ipAddress_struct;
 // AsyncUDP udp;
 
 static char TAG[] = "Main";
@@ -72,6 +80,9 @@ WebServer webServer(80);
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 void readFromFile(String filename);
 void readnWriteEEProm();
+void printDateTime(const RtcDateTime &dt);
+void printLocalTime();
+int clientReadTimeout(int timeout);
 
 // EthernetClient Client;
 WiFiClient Client;
@@ -85,6 +96,9 @@ IPAddress dns1(164, 124, 101, 2);
 IPAddress dns2(8, 8, 8, 8);
 IPAddress websocketserver(192, 168, 0, 57);
 uint16_t webSocketPort = 81;
+QueueHandle_t h_queue;
+int16_t qRequest[5];
+
 void EthLan8720Start();
 void readInputSerial();
 void writeHellowTofile();
@@ -102,6 +116,18 @@ String input = "";
 #define FNM_CASEFOLD 0x10    // Case insensitive search.
 #define FNM_PREFIX_DIRS 0x20 // Directory prefixes of pattern match too.
 #define EOS '\0'
+int myClientPrintf(const char *format, ...)
+{
+  if (!Client.connected())
+  {
+    return 0;
+  }
+  va_list vl;
+  va_start(vl, format);
+  auto ret = Client.printf(format, vl);
+  va_end(vl);
+  return ret;
+}
 //-----------------------------------------------------------------------
 static const char *rangematch(const char *pattern, char test, int flags)
 {
@@ -413,7 +439,60 @@ out_error:
   errno = saved_errno;
   return -1;
 }
+int clientReadTimeout(int timeout)
+{ // second
+  unsigned long prv_mills = millis();
+  unsigned long now = prv_mills;
+  while (1)
+  {
+    now = millis();
+    if (now > prv_mills + timeout)
+      return -1;
+    int c = Client.read();
+    if (c == 'Y')
+      return 'Y';
+    else if (c == 'n')
+    {
+      Client.printf("\r\nCanceled...");
+      return 'n';
+    }
+  }
+}
+void init_configCallback(cmd *cmdPtr)
+{
+  Command cmd(cmdPtr);
+  if (!Client.connected())
+    return;
+  EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  //
+  Client.printf("\r\nipaddress %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString());
+  Client.printf("gateway %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString());
+  Client.printf("subnetmask %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString());
+  Client.printf("dns1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString());
+  Client.printf("dns2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString());
+  Client.printf("websocketserver %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
+  Client.printf("webSocketPort %d\r\n", ipAddress_struct.WEBSERVERPORT);
+  Client.printf("NTP_1 %s\r\n", IPAddress(ipAddress_struct.NTP_1).toString());
+  Client.printf("NTP_2 %s\r\n", IPAddress(ipAddress_struct.NTP_2).toString());
+  Client.printf("NTP USE %d\r\n", ipAddress_struct.ntpuse);
+  Client.printf("\r\nWould you like to change Defult Setting? \r\n It will be reboot now.(Y/n) ");
 
+  int c = clientReadTimeout(10000);
+  // while (1)
+  // {
+  //   int c = Client.read();
+  if (c == 'Y'){
+  EEPROM.writeByte(0, 0);
+  EEPROM.commit();
+  readnWriteEEProm();
+  }
+  else if (c == 'n')
+  {
+    Client.printf("\r\nCanceled...");
+    return;
+  }
+  // }
+}
 void quit_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
@@ -422,16 +501,41 @@ void quit_configCallback(cmd *cmdPtr)
   if (Client.connected())
     Client.stop();
 }
+void printLocalTime()
+{
+  struct tm timeinfo;
+  getLocalTime(&timeinfo, 1);
+  char strftime_buf[64];
+  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+  Client.printf("\r\nThe current date/time in is: %s ", strftime_buf);
+  Client.println();
+}
+void getNtpTime()
+{
+  configTime(gmtOffset_sec, daylightOffset_sec, IPAddress(ipAddress_struct.NTP_1).toString().c_str(), IPAddress(ipAddress_struct.NTP_2).toString().c_str());
+  printLocalTime();
+}
 void time_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
   if (!Client.connected())
     return;
-  struct tm timeinfo;
-  getLocalTime(&timeinfo, 1);
-  char strftime_buf[64];
-  strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-  Client.printf("\r\nThe current date/time in is: %s", strftime_buf);
+  printLocalTime();
+  RtcDateTime now = Rtc.GetDateTime();
+  printDateTime(now);
+
+  EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  String strValue;
+  Argument strArg = cmd.getArgument("ntpuse");
+  strValue = strArg.getValue();
+  if (strValue.toInt() != 255 && (strValue.toInt() == 0 || strValue.toInt() == 1))
+  {
+    Client.printf("ntp use status is %d\r\n", strValue.toInt());
+    ipAddress_struct.ntpuse = strValue.toInt();
+  }
+  if (ipAddress_struct.ntpuse)
+    getNtpTime();
+  // EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
 }
 
 void ls_configCallback(cmd *cmdPtr)
@@ -532,9 +636,7 @@ void ip_configCallback(cmd *cmdPtr)
     return;
 #endif
   String strValue;
-  stIpaddress ipAddress_struct;
 
-  // EEPROM.readBytes(1, (stIpaddress *)&ipAddress_struct, 1);
   readnWriteEEProm();
 
   Argument strArg = cmd.getArgument("set");
@@ -630,28 +732,30 @@ void ip_configCallback(cmd *cmdPtr)
   Client.printf("\r\ndns2 %s", IPAddress(ipAddress_struct.DNS2).toString());
   Client.printf("\r\nwebserverport %d", ipAddress_struct.WEBSERVERPORT);
   Client.printf("\r\nWould you like to change IpAddress? \r\n I will be affect after reboot.(Y/n) ");
-  while (1)
-  {
-    int c = Client.read();
-    if (c == 'Y')
-      break;
-    else if (c == 'n')
-    {
-      Client.printf("\r\nCanceled...");
-      return;
-    }
+
+  int c = clientReadTimeout(10000);
+  // while (1)
+  // {
+  //   int c = Client.read();
+  if (c == 'Y'){
   }
-  EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(stIpaddress));
+  else if (c == 'n' || c == -1)
+  {
+    Client.printf("\r\nCanceled...");
+    return;
+  }
+  // }
+  EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
   EEPROM.commit();
   FILE *fp;
   fp = fopen("/spiffs/ipaddress.txt", "w+");
   if (fp)
   {
-    fwrite((stIpaddress *)&ipAddress_struct, sizeof(stIpaddress), 1, fp);
+    fwrite((nvsSystemSet *)&ipAddress_struct, sizeof(nvsSystemSet), 1, fp);
   }
   fclose(fp);
   fp = fopen("/spiffs/ipaddress.txt", "r");
-  fread((stIpaddress *)&ipAddress_struct, sizeof(stIpaddress), 1, fp);
+  fread((nvsSystemSet *)&ipAddress_struct, sizeof(nvsSystemSet), 1, fp);
   fclose(fp);
 
   Client.printf("\r\nSucceed.. You can use reboot command\r\n");
@@ -711,7 +815,12 @@ void SimpleCLISetUp()
 {
   cmd_ls_config = cli.addCommand("ls", ls_configCallback);
   cmd_ls_config = cli.addCommand("quit", quit_configCallback);
+  cmd_ls_config = cli.addCommand("init", init_configCallback);
   cmd_ls_config = cli.addCommand("time", time_configCallback);
+  cmd_ls_config.addFlagArgument("s/et");
+  cmd_ls_config.addArgument("n/tpuse", "255");
+  cmd_ls_config.addArgument("ntp1", 0); // time.bora.net
+  cmd_ls_config.addArgument("ntp2", 0); // kr.pool.ntp.org
 
   cmd_ls_config = cli.addSingleArgCmd("rm", rm_configCallback);
   cmd_ls_config = cli.addSingleArgCmd("cat", cat_configCallback);
@@ -791,7 +900,9 @@ void setIpaddressToEthernet()
 void EthLan8720Start()
 {
   // WiFi.onEvent(WiFiEvent);
-  ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLK_MODE);
+  pinMode(ETH_POWER_PIN, OUTPUT);
+  ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO0_IN /*ETH_CLK_MODE*/);
+  // digitalWrite(ETH_POWER_PIN,LOW);
 
   if (ETH.config(ipaddress, gateway, subnetmask, dns1, dns2) == false)
     printf("Eth config failed...\r\n");
@@ -903,16 +1014,43 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         xSemaphoreTake(xMutex, portMAX_DELAY);
         modBusData.Data[reg] = set;
         xSemaphoreGive(xMutex);
-        printf("\r\nreq_type=%s reg=%d set=%d", req_type, reg, set);
+
+        // if (Client.connected())
+        //   Client.printf("Data Received From web reg:0x%x set:0x%x\r\n", reg, set);
+        // for (int ii = 0; ii < 30; ii++)
+        //   if (Client.connected())
+        //     Client.printf("%x ", modBusData.Data[ii]);
+        memset(qRequest, 0x00, 5);
+        qRequest[0] = 0x06;
+        qRequest[1] = reg;
+        qRequest[2] = set;
+        // if (Client.connected())
+        //   Client.printf("Emputy Queue\n\r");
+        // if (Client.connected())
+        //   Client.printf("Sent to Queue\n\r");
+        // for (int ii = 0; ii < 5; ii++)
+        //   Client.printf("0x%x ", qRequest[ii]);
+        xQueueSend(h_queue, &qRequest, (TickType_t)0);
       }
       else if (!String(req_type).compareTo("timeSet"))
       {
         int reg = doc_rx["reg"].as<int>();
         unsigned long set = doc_rx["set"].as<unsigned long>();
         struct timeval tmv;
-        tmv.tv_sec = set;
+        tmv.tv_sec = set + gmtOffset_sec;
         tmv.tv_usec = 0;
-        settimeofday(&tmv, NULL);
+        settimeofday(&tmv, NULL); // 웹에서 PC시간으로 설정을 한다.
+
+        struct tm timeinfo;
+        getLocalTime(&timeinfo, 1);
+        RtcDateTime dt(
+            timeinfo.tm_year - 100, /* 1900 부터 2023년은 123 Rtc는 2000부터 따라서 */
+            timeinfo.tm_mon,
+            timeinfo.tm_mday,
+            timeinfo.tm_hour,
+            timeinfo.tm_min,
+            timeinfo.tm_sec);
+        Rtc.SetDateTime(dt);
         ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
       }
     }
@@ -930,6 +1068,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     for (int i = 0; i < 60; i++)
     {
       modbusValues.add(modBusData.Data[i]);
+      // printf(" [%d] %d, ", i, modBusData.Data[i]);
     }
     xSemaphoreGive(xMutex);
 
@@ -1296,10 +1435,10 @@ void telnetServerCheckClient()
 void readnWriteEEProm()
 {
   uint8_t ipaddr1;
-  stIpaddress ipAddress_struct;
   if (EEPROM.read(0) != 0x55)
   {
-
+    if (Client.connected())
+      Client.printf("\n\rInitialize....Ipset memory....to default..");
     Serial.printf("\n\rInitialize....Ipset memory....to default..");
     EEPROM.writeByte(0, 0x55);
     ipAddress_struct.IPADDRESS = (uint32_t)IPAddress(192, 168, 0, 57);
@@ -1309,10 +1448,15 @@ void readnWriteEEProm()
     ipAddress_struct.DNS1 = IPAddress(8, 8, 8, 8).operator uint32_t();
     ipAddress_struct.DNS2 = IPAddress(164, 124, 101, 2).operator uint32_t();
     ipAddress_struct.WEBSERVERPORT = 81;
-    EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(stIpaddress));
+
+    ipAddress_struct.NTP_1 = (uint32_t)(IPAddress((uint8_t *)"203.248.240.140")); //(203, 248, 240, 140);
+    ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13, 209, 84, 50);
+    ipAddress_struct.ntpuse = false;
+
+    EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
     EEPROM.commit();
   }
-  EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(stIpaddress));
+  EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
 
   ipaddress = IPAddress(ipAddress_struct.IPADDRESS);
   gateway = IPAddress(ipAddress_struct.GATEWAY);
@@ -1366,6 +1510,7 @@ void printDateTime(const RtcDateTime &dt)
              dt.Hour(),
              dt.Minute(),
              dt.Second());
+  Serial.print("\r\nDs1302 RTC Time is ");
   Serial.print(datestring);
 }
 void setRtc()
@@ -1382,7 +1527,7 @@ void setRtc()
     //    2) the battery on the device is low or even missing
 
     Serial.println("RTC lost confidence in the DateTime!");
-    Rtc.SetDateTime(compiled);
+    // Rtc.SetDateTime(compiled);
   }
   if (Rtc.GetIsWriteProtected())
   {
@@ -1424,18 +1569,29 @@ void setup()
   EEPROM.begin(100);
   setRtc();
 
-  littleFsInit();
-  readnWriteEEProm();
-  EthLan8720Start();
+  memset(qRequest, 0x00, 5);
+  h_queue = xQueueCreate(5, sizeof(qRequest));
+  if (h_queue == 0)
+  {
+    printf("\r\nFailed to create queue= %p\n", h_queue);
+  }
+
   WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
+  printf("\r\nWiFi.mode(WIFI_MODE_AP)");
   WiFi.mode(WIFI_MODE_AP);
+  printf("\r\nWiFi.softAP(soft_ap_ssid, soft_ap_password)");
   WiFi.softAP(soft_ap_ssid, soft_ap_password);
-  // WiFi.softAPsetHostname(soft_ap_ssid);
-  // WiFi.begin(ssid, password);
+  printf("\r\nlittleFsInit");
+  littleFsInit();
+  printf("\r\nreadnWriteEEProm");
+  readnWriteEEProm();
+  printf("\r\nEthLan8720Start");
+  EthLan8720Start();
+  printf("\r\nWiFi.softAPConfig");
 
   printf("\r\nmDNS responder started");
-
   serverOnset();
+  printf("\r\nWebServer Begin");
   webServer.begin();
 
   // setIpaddressToEthernet();
@@ -1453,10 +1609,9 @@ void setup()
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
   // stdout = fwopen(NULL, &writeToUdp);
-  stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
-
   xMutex = xSemaphoreCreateMutex();
   xTaskCreate(modbusRequest, "modbus", 2000, NULL, 1, h_pxModbus);
+  stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
 }
 
 unsigned long previousmills = 0;
@@ -1477,7 +1632,7 @@ void loop()
     JsonObject object = doc_tx.to<JsonObject>();
     time(&nowTime);
     object["type"] = "time";
-    object["time"] = nowTime;
+    object["time"] = nowTime - gmtOffset_sec;
     // object["rand2"]=random(100);
     serializeJson(doc_tx, sendString);
 
@@ -1490,11 +1645,11 @@ void loop()
   delay(1);
 }
 
-    // RtcDateTime now = Rtc.GetDateTime();
-    // printDateTime(now);
-    // Serial.println();
-    // struct tm timeinfo;
-    // getLocalTime(&timeinfo);
-    // char strftime_buf[64];
-    // strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-    // Serial.printf("\r\nThe current date/time in is: %s", strftime_buf);
+// RtcDateTime now = Rtc.GetDateTime();
+// printDateTime(now);
+// Serial.println();
+// struct tm timeinfo;
+// getLocalTime(&timeinfo);
+// char strftime_buf[64];
+// strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+// Serial.printf("\r\nThe current date/time in is: %s", strftime_buf);

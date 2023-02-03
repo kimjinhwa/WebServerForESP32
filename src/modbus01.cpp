@@ -14,13 +14,14 @@
 #define FIRST_REGISTER 0x0000
 #define NUM_VALUES 60
 #define READ_INTERVAL 5000
-bool data_ready = false;
+uint8_t data_ready = 0;
 
 uint32_t request_time;
 ModbusClientRTU MB(Serial);
 
 extern modBusData_t modBusData;
-
+extern QueueHandle_t h_queue;
+extern int16_t qRequest[5];
 // extern WiFiClient Client;
 //  static int writeToUdp(void *cookie, const char *data, int size)
 //  {
@@ -39,21 +40,41 @@ extern SemaphoreHandle_t xMutex;
 void handleData(ModbusMessage response, uint32_t token)
 {
     // First value is on pos 3, after server ID, function code and length byte
+    response.get(1, data_ready); // function code
+    // if (Client.connected())
+    //     Client.printf("received function [%d] ", data_ready);
     uint16_t offs = 3;
-    // The device has values all as IEEE754 float32 in two consecutive registers
-    // Read the requested in a loop
-    if (Client.connected())
-        Client.printf("data Received\r\n");
-    for (uint8_t i = 0; i < NUM_VALUES; ++i)
+    // if (Client.connected())
+    //     Client.printf("data Received %d %d\r\n", data_ready, token);
+    xSemaphoreTake(xMutex, portMAX_DELAY);
+    // Client.printf("\r\n");
+    uint16_t readValue;
+    if (data_ready == READ_INPUT_REGISTER)
     {
-        xSemaphoreTake(xMutex, portMAX_DELAY); 
-        offs = response.get(offs, modBusData.Data[i]);
-        xSemaphoreGive(xMutex);
-        Client.printf("%x ",modBusData.Data[i]);
+        for (uint8_t i = 0; i < NUM_VALUES; ++i)
+        {
+            offs = response.get(offs, readValue);
+            modBusData.Data[i] = readValue;
+        }
     }
-    // Signal "data is complete"
+
+    if (data_ready == WRITE_HOLD_REGISTER)
+    {
+        if (Client.connected())
+        {
+        }
+    }
+    /*
+    for (int ii = 0; ii < 40; ii++)
+        if (Client.connected())
+            Client.printf("%x ", modBusData.Data[ii]);
+    if (Client.connected())
+        Client.println("");
+    */
+    xSemaphoreGive(xMutex);
+    
+    
     request_time = token;
-    data_ready = true;
 }
 // Define an onError handler function to receive error responses
 // Arguments are the error code returned and a user-supplied token to identify the causing request
@@ -61,8 +82,8 @@ void handleError(Error error, uint32_t token)
 {
     // ModbusError wraps the error code and provides a readable error message for it
     ModbusError me(error);
-    // if (Client.connected())
-    //     Client.printf("Error response: %02X - %s\n", (int)me, (const char *)me);
+    if (Client.connected())
+        Client.printf("Error response: %02X - %s\n", (int)me, (const char *)me);
     // printf("Error response: %02X - %s\n", (int)me, (const char *)me);
     //  LOG_E("Error response: %02X - %s\n", (int)me, (const char *)me);
 }
@@ -79,19 +100,36 @@ void modbusRequest(void *parameter)
     // Issue the request
     // if (Client.connected())
     //     Client.printf("\r\nData send...");
-    int LEDSTATUS=1;
+    int LEDSTATUS = 1;
     modBusRtuSetup();
+    int16_t rQuest[5];
+
+    unsigned long previousmills = 0;
+    int interval = 2000;
+    time_t nowTime;
+    unsigned long now;
     while (1)
     {
-        data_ready = false;
-        Error err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
-        if (err != SUCCESS)
+        now = millis();
+        if (now - previousmills > interval)
         {
-            ModbusError me(err);
-            // LOG_E("Error response: %02X - %s\n", (int)me, (const char *)me);
+            data_ready = 0;
+            Error err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
+            if (err != SUCCESS)
+            {
+                ModbusError me(err);
+            }
+            time(&nowTime);
+            previousmills = now;
+            digitalWrite(33, LEDSTATUS = !LEDSTATUS);
+        };
+        if (xQueueReceive(h_queue, &rQuest, (TickType_t)5))
+        {
+            data_ready = 0;
+            Error err = MB.addRequest((uint32_t)millis(), 1, WRITE_HOLD_REGISTER, rQuest[1], rQuest[2]);
+            // vTaskDelay(100);
+            err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
         }
-        vTaskDelay(1000);
-        digitalWrite(33,LEDSTATUS= !LEDSTATUS);
     }
 }
 // uint16_t port = 502;                       // port of modbus server

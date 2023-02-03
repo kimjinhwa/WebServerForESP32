@@ -616,7 +616,7 @@ document.getElementById('viewN').addEventListener('click', (e) => {
 //btnSetTime
 document.getElementById('btnSetTime').addEventListener('click', (e) => {
     nowTime = new Date();
-    const data = JSON.stringify({ 'type': 'timeSet', 'reg': 0,'set':nowTime.getTime()/1000  }); /* BIT 12 =0 열림*/
+    const data = JSON.stringify({ 'type': 'timeSet', 'reg': 0,'set':nowTime.getTime()/1000   }); /* BIT 12 =0 열림*/
     console.log(data);
     webSocket.send(data);
 })
