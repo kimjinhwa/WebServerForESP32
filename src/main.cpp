@@ -62,7 +62,7 @@ nvsSystemSet ipAddress_struct;
 
 static char TAG[] = "Main";
 StaticJsonDocument<2000> doc_tx;
-StaticJsonDocument<2000> doc_rx;
+// StaticJsonDocument<2000> doc_rx;
 TaskHandle_t *h_pxModbus;
 /* setup function */
 const char *soft_ap_ssid = "CHA_IFT";
@@ -82,8 +82,8 @@ void readFromFile(String filename);
 void readnWriteEEProm();
 void printDateTime(const RtcDateTime &dt);
 void printLocalTime();
+void logfileRead(int32_t iStart, int32_t iEnd);
 int clientReadTimeout(int timeout);
-
 // EthernetClient Client;
 WiFiClient Client;
 // EthernetServer telnetServer(23);
@@ -397,14 +397,14 @@ static int file_copy(const char *to, const char *from)
   if (fd_to == NULL)
     goto out_error;
 
-  while (nread = fread(buf, 1, sizeof(buf), fd_from), nread > 0)
+  while (nread = fread(buf, sizeof(buf), 1, fd_from), nread > 0)
   {
     char *out_ptr = buf;
     ssize_t nwritten;
 
     do
     {
-      nwritten = fwrite(out_ptr, 1, nread, fd_to);
+      nwritten = fwrite(out_ptr, nread, 1, fd_to);
 
       if (nwritten >= 0)
       {
@@ -481,10 +481,11 @@ void init_configCallback(cmd *cmdPtr)
   // while (1)
   // {
   //   int c = Client.read();
-  if (c == 'Y'){
-  EEPROM.writeByte(0, 0);
-  EEPROM.commit();
-  readnWriteEEProm();
+  if (c == 'Y')
+  {
+    EEPROM.writeByte(0, 0);
+    EEPROM.commit();
+    readnWriteEEProm();
   }
   else if (c == 'n')
   {
@@ -515,9 +516,44 @@ void getNtpTime()
   configTime(gmtOffset_sec, daylightOffset_sec, IPAddress(ipAddress_struct.NTP_1).toString().c_str(), IPAddress(ipAddress_struct.NTP_2).toString().c_str());
   printLocalTime();
 }
+void logWrite();
+void log_configCallback(cmd *cmdPtr)
+{
+  Command cmd(cmdPtr);
+  bool if_modified = false;
+  if (!Client.connected())
+    return;
+  String strValue;
+  Argument strArg = cmd.getArgument("write");
+  if (strArg.isSet())
+  {
+    logWrite();
+    Client.println("Dump data to file Done.");
+    return;
+  }
+  strArg = cmd.getArgument("read");
+  if (strArg.isSet())
+  {
+    logfileRead(0, 0xFFFFFFF);
+    return;
+  }
+
+  strArg = cmd.getArgument("nread");
+  strValue = strArg.getValue();
+  int iStart = strValue.toInt();
+
+  strArg = cmd.getArgument("number");
+  strValue = strArg.getValue();
+  int iEnd = strValue.toInt();
+  if (iStart >= 0)
+  {
+    logfileRead(iStart, iStart + iEnd);
+  }
+}
 void time_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
+  bool if_modified = false;
   if (!Client.connected())
     return;
   printLocalTime();
@@ -532,10 +568,38 @@ void time_configCallback(cmd *cmdPtr)
   {
     Client.printf("ntp use status is %d\r\n", strValue.toInt());
     ipAddress_struct.ntpuse = strValue.toInt();
+    if_modified = true;
   }
+
+  strArg = cmd.getArgument("ntp1");
+  strValue = strArg.getValue();
+  if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
+  {
+    Client.printf("\r\nError Wrong Ip %s", strValue);
+    return;
+  }
+  else
+  {
+    ipAddress_struct.NTP_1 = (uint32_t)(IPAddress((uint8_t *)strValue.c_str()));
+    if_modified = true;
+  }
+  strArg = cmd.getArgument("ntp2");
+  strValue = strArg.getValue();
+  if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
+  {
+    Client.printf("\r\nError Wrong Ip %s", strValue);
+    return;
+  }
+  else
+  {
+    ipAddress_struct.NTP_2 = (uint32_t)(IPAddress((uint8_t *)strValue.c_str()));
+    if_modified = true;
+  }
+
   if (ipAddress_struct.ntpuse)
     getNtpTime();
-  // EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  if (if_modified)
+    EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
 }
 
 void ls_configCallback(cmd *cmdPtr)
@@ -737,7 +801,8 @@ void ip_configCallback(cmd *cmdPtr)
   // while (1)
   // {
   //   int c = Client.read();
-  if (c == 'Y'){
+  if (c == 'Y')
+  {
   }
   else if (c == 'n' || c == -1)
   {
@@ -791,7 +856,7 @@ void df_configCallback(cmd *cmdPtr)
   Client.printf("|Psram    |       |          |   %d | ESP.PsramSize   |\r\n", ESP.getPsramSize());
   Client.printf("|Free Psrm|       |          |   %d | ESP.FreePsram   |\r\n", ESP.getFreePsram());
   Client.printf("|UsedPsram|       |          |   %d | Psram - FreeRam |\r\n", ESP.getPsramSize() - ESP.getFreePsram());
-  Client.printf("|Modbus Threed heep free     |   %d | Psram - FreeRam |\r\n", uxTaskGetStackHighWaterMark(h_pxModbus));
+  Client.printf("|Modbus Threed heap free     |   %d | Psram - FreeRam |\r\n", uxTaskGetStackHighWaterMark(h_pxModbus));
 }
 
 void errorCallback(cmd_error *errorPtr)
@@ -815,6 +880,11 @@ void SimpleCLISetUp()
 {
   cmd_ls_config = cli.addCommand("ls", ls_configCallback);
   cmd_ls_config = cli.addCommand("quit", quit_configCallback);
+  cmd_ls_config = cli.addCommand("log", log_configCallback);
+  cmd_ls_config.addFlagArgument("w/rite");
+  cmd_ls_config.addFlagArgument("r/ead");     // all data read
+  cmd_ls_config.addArgument("nr/ead", "-1");  // n data read
+  cmd_ls_config.addArgument("nu/mber", "10"); // n data read
   cmd_ls_config = cli.addCommand("init", init_configCallback);
   cmd_ls_config = cli.addCommand("time", time_configCallback);
   cmd_ls_config.addFlagArgument("s/et");
@@ -997,7 +1067,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   }
   break;
   case WStype_TEXT:
-    de_err = deserializeJson(doc_rx, payload);
+    de_err = deserializeJson(doc_tx, payload);
     if (de_err)
     {
       printf("");
@@ -1005,11 +1075,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     }
     else
     {
-      const char *req_type = doc_rx["type"].as<const char *>();
+      const char *req_type = doc_tx["type"].as<const char *>();
       if (!String(req_type).compareTo("command"))
       {
-        int reg = doc_rx["reg"].as<int>();
-        int set = doc_rx["set"].as<int>();
+        int reg = doc_tx["reg"].as<int>();
+        int set = doc_tx["set"].as<int>();
 
         xSemaphoreTake(xMutex, portMAX_DELAY);
         modBusData.Data[reg] = set;
@@ -1034,8 +1104,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       }
       else if (!String(req_type).compareTo("timeSet"))
       {
-        int reg = doc_rx["reg"].as<int>();
-        unsigned long set = doc_rx["set"].as<unsigned long>();
+        int reg = doc_tx["reg"].as<int>();
+        unsigned long set = doc_tx["set"].as<unsigned long>();
         struct timeval tmv;
         tmv.tv_sec = set + gmtOffset_sec;
         tmv.tv_usec = 0;
@@ -1324,7 +1394,7 @@ void serverOnset()
         }
         else if (upload.status == UPLOAD_FILE_WRITE)
         {
-          fwrite((char *)upload.buf, 1, upload.currentSize, fUpdate);
+          fwrite((char *)upload.buf, upload.currentSize, 1, fUpdate);
           UpdateSize += upload.currentSize;
           printf(".");
         }
@@ -1465,35 +1535,33 @@ void readnWriteEEProm()
   dns2 = IPAddress(ipAddress_struct.DNS2);
   websocketserver = IPAddress(ipAddress_struct.WEBSOCKETSERVER);
   webSocketPort = ipAddress_struct.WEBSERVERPORT;
-
-  // Serial.printf("\n\ripaddress %s", ipaddress.toString());
-  // Serial.printf("\n\rgateway %s", gateway.toString());
-  // Serial.printf("\n\rsubnetmask %s", subnetmask.toString());
-  // Serial.printf("\n\rdns1 %s", dns1.toString());
-  // Serial.printf("\n\rdns2 %s", dns2.toString());
-  // Serial.printf("\n\rwebsocketserver %s", websocketserver.toString());
-  // Serial.printf("\n\rwebSocketPort %d", webSocketPort);
 }
-void logWrite()
-{
-  // modBusData_t logData= {
-  // logData.logTime = 1351824120;
-  // for (int ipos = 0; ipos < 60; ipos++)
-  //   logData.modBusData[ipos] = modBusData[ipos];
-  FILE *fp = fopen("/spiffs/logFile.bin", "a+");
-  xSemaphoreTake(xMutex, portMAX_DELAY);
-  fwrite((byte *)&modBusData, sizeof(byte), sizeof(modBusData_t), fp);
-  xSemaphoreGive(xMutex);
-  fclose(fp);
-}
-void logfileRead()
+void logfileRead(int32_t iStart, int32_t iEnd)
 {
   modBusData_t logData;
-  // for (int ipos = 0; ipos < 60; ipos++)
-  //   logData.Data[ipos] = modBusData.Data[ipos];
-  FILE *fp = fopen("/spiffs/logFile.bin", "a+");
-  fread((byte *)&logData, sizeof(byte), sizeof(modBusData_t), fp);
-  fclose(fp);
+  FILE *fp = fopen("/spiffs/logFile.bin", "r");
+  uint16_t readc = 1, icount = 0;
+  JsonArray modbusValues;
+  String output;
+  while (!feof(fp))
+  {
+    readc = fread((byte *)&logData, sizeof(modBusData_t), sizeof(byte), fp);
+    if (icount >= iStart && icount < iEnd)
+    {
+      if (readc)
+      {
+        Client.printf("\r\n%d %s\t", icount, ctime((time_t *)&logData.logTime));
+        doc_tx.clear();
+        doc_tx["time"] = logData.logTime;
+        modbusValues = doc_tx.createNestedArray("value");
+        for (int16_t i = 0; i < 60; i++)
+          modbusValues.add(logData.Data[i]);
+        serializeJson(doc_tx, output);
+        Client.printf("%s", output.c_str());
+      }
+    }
+    icount++;
+  }
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -1645,11 +1713,21 @@ void loop()
   delay(1);
 }
 
-// RtcDateTime now = Rtc.GetDateTime();
-// printDateTime(now);
-// Serial.println();
-// struct tm timeinfo;
-// getLocalTime(&timeinfo);
-// char strftime_buf[64];
-// strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-// Serial.printf("\r\nThe current date/time in is: %s", strftime_buf);
+// {
+//   // FILE *file = fopen("/spiffs/eventLog.json", "r");
+//   ifstream fin;
+//    string line;
+//   fin.open("/spiffs/eventLog.json");
+//   if (!fin.is_open())
+//   {
+//     Serial.println("There was an error opening the file");
+//     return;
+//   }
+//   while (getline(fin, line)) {
+
+//         // Print line (read from file) in Console
+//         Serial.print(line);
+//     }
+//   fin.close();
+//   Serial.print("\r\nFileRead OK");
+// }

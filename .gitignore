@@ -4,4 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 src/esp32_8720_arduino.code-workspace
+doc/
 *~

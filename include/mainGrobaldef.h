@@ -1,7 +1,7 @@
 #ifndef MAINGROBALDEF_H
 #define MAINGROBALDEF_H
 #ifndef modBus60_t
-typedef int modBus60_t[60];
+typedef int16_t modBus60_t[60];
 #endif
 
 #ifndef modBusData_t
