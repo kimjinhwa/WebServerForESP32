@@ -1,9 +1,12 @@
-const modBusDataArray = [/* log data received from UPS monitoring system */];
-const justOnlyEvent = []; // array to store event data
-const alarmEvent = []; // array to store alarm data
-
+"use strict"
+//const modBusDataArray = [/* log data received from UPS monitoring system */];
 class modBusDataClass {
-    constructor(dataArrayBuffer) {
+    constructor(dataArrayBuffer,justOnlyEvent,alarmEvent,modBusDataArray  ) {
+
+        this.justOnlyEvent=justOnlyEvent;
+        this.alarmEvent=alarmEvent  ;
+        this.modBusDataArray=modBusDataArray ;
+
         const int16Array = new Uint8Array(dataArrayBuffer);
         const arrayBuffer = int16Array.buffer;
         const dataView = new DataView(arrayBuffer);
@@ -12,15 +15,6 @@ class modBusDataClass {
         this.stringfyModBus60 = null;// variable to store the previous modBus60 state
         this.prveInden = -1;
 
-        //console.log("modbusarray " + this.prveIndenx)
-        // if (modBusDataArray.length > 0) {
-        //     let length = modBusDataArray.length
-        //     this.Register_12 = modBusDataArray[length - 1].modBus60[12];
-        //     this.Register_13 = modBusDataArray[length - 1].modBus60[13];
-        //     this.Register_14 = modBusDataArray[length - 1].modBus60[14];
-        //     this.Register_15 = modBusDataArray[length - 1].modBus60[15];
-        //     this.stringfyModBus60 = modBusDataArray[length - 1].stringfyModBus60;
-        // }
         for (let i = 0; i < 60; i++) {
             this.modBus60[i] = dataView.getInt16(4 + (2 * i), 1);
         }
@@ -55,9 +49,7 @@ class modBusDataClass {
             this.processModBus60();
             modBusDataArray.push(this);
         }
-        //console.log("hello");
     }
-
     // method to process the modBus60 register and get the changes
     processModBus60() {
         const bitToCheck12_event = [0, 2, 3, 5, 6, 8, 9, 10, 11, 12, 13, 14]; // bits to check for specific conditions
@@ -85,10 +77,10 @@ class modBusDataClass {
             if (this.stringfyModBus60 === null || this.stringfyModBus60 !== newModBus60) {
                 // save the changes only if there are no previous data or the current data is different from the previous data
                 if (eventList.length > 0) {
-                    justOnlyEvent.push({ logTime: this.logTime, events: eventList });
+                    this.justOnlyEvent.push({ logTime: this.logTime, events: eventList });
                 }
                 if (alarmList.length > 0) {
-                    alarmEvent.push({ logTime: this.logTime, alarms: alarmList });
+                    this.alarmEvent.push({ logTime: this.logTime, alarms: alarmList });
                 }
                 this.stringfyModBus60 = newModBus60;
             }
@@ -136,7 +128,6 @@ class modBusDataClass {
                     return { type: message.type, message: message.message };
                 }
             }
-
         }
         return null;
     }
@@ -144,18 +135,20 @@ class modBusDataClass {
 /**/ 
 class modbusDataArrayClass {
     constructor() {
+        this.modBusDataArray = [/* log data received from UPS monitoring system */];
+        this.justOnlyEvent = []; // array to store event data
+        this.alarmEvent = []; // array to store alarm data
         this.int16Array = new Uint8Array(124);
         this.arrayBuffer = this.int16Array.buffer;
         this.dataView = new DataView(this.arrayBuffer);
-        this.modBusDataArray = [];/* log data received from UPS monitoring system */
-        this.justOnlyEvent = []; // array to store event data
-        this.alarmEvent = []; // array to store alarm data
+
         this.dataView.setUint32(0, (new Date()).getTime(), 1);
         this.dataView.setInt16(4 + 24, 0b0000111000000000, 1);
         this.logTime = this.dataView.getUint32(0, 1);
         // 새로운 인스턴스를 만들지만 만들어지 cmdBus는 Array에 들어가지 
         // 않을 수 도 있다. 앞의 데이타와 동일하면 추가 되지 않는다.
-        this.cmodBus = new modBusDataClass(this.dataView.buffer);
+        this.cmodBus = new modBusDataClass(this.dataView.buffer,this.justOnlyEvent,this.alarmEvent ,this.modBusDataArray );
+        //this.cmodBus = new modBusDataClass(this.dataView.buffer);
     }
     addDataArray(dataArrayBuffer,
             event12=0b0000111000000000
@@ -166,32 +159,32 @@ class modbusDataArrayClass {
         this.int16Array = new Uint8Array( dataArrayBuffer);
         this.arrayBuffer = this.int16Array.buffer;
         this.dataView = new DataView(this.arrayBuffer);
-        this.modBusDataArray = [];/* log data received from UPS monitoring system */
-        this.justOnlyEvent = []; // array to store event data
-        this.alarmEvent = []; // array to store alarm data
         this.dataView.setUint32(0, (new Date()).getTime(), 1);
         this.dataView.setInt16(4 + 24, event12, 1);
         this.logTime = this.dataView.getUint32(0, 1);
-        this.cmodBus = new modBusDataClass(this.dataView.buffer);
+
+        this.cmodBus = new modBusDataClass(this.dataView.buffer,this.justOnlyEvent,this.alarmEvent,this.modBusDataArray  );
     }
     printEvent(){
-       console.log(justOnlyEvent)
-       justOnlyEvent.forEach(ev => {
+       console.log(this.justOnlyEvent)
+       this.justOnlyEvent.forEach(ev => {
         console.log(ev.events)
        });
     }
     printAlarm(){
-       console.log(justOnlyEvent)
-        alarmEvent.forEach(er => {
+       console.log(this.justOnlyEvent)
+        this.alarmEvent.forEach(er => {
             console.log(er.alarms)
         });
     }
 }
-modData = new modbusDataArrayClass();
+let modData = new modbusDataArrayClass();
 let int16Array = new Uint8Array(124);
-modData.addDataArray(int16Array);
+modData.addDataArray(int16Array,0b0000111000000001);
+modData.addDataArray(int16Array,0b0000111000000100);
 modData.printEvent();
 modData.printAlarm();
+
 // modDa.justOnlyEvent.forEach(ev => {
 //     console.log(ev.events)
 // });
@@ -234,3 +227,18 @@ alarmEvent.forEach(er => {
 //     const modBusData = data;//new modBusDataClass(data);
 //     modBusData.processModBus60();
 // });
+        //console.log("modbusarray " + this.prveIndenx)
+        // if (modBusDataArray.length > 0) {
+        //     let length = modBusDataArray.length
+        //     this.Register_12 = modBusDataArray[length - 1].modBus60[12];
+        //     this.Register_13 = modBusDataArray[length - 1].modBus60[13];
+        //     this.Register_14 = modBusDataArray[length - 1].modBus60[14];
+        //     this.Register_15 = modBusDataArray[length - 1].modBus60[15];
+        //     this.stringfyModBus60 = modBusDataArray[length - 1].stringfyModBus60;
+        // }
+        //this.modBusDataArray = [];/* log data received from UPS monitoring system */
+        //this.justOnlyEvent = []; // array to store event data
+        //this.alarmEvent = []; // array to store alarm data
+        //this.modBusDataArray = [];/* log data received from UPS monitoring system */
+        //this.justOnlyEvent = []; // array to store event data
+        //this.alarmEvent = []; // array to store alarm data
