@@ -7,10 +7,11 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Update.h>
-#include <AsyncUDP.h>
+// #include <AsyncUDP.h>
 #include <EEPROM.h>
 #include <ThreeWire.h>
 #include <RtcDS1302.h>
+#include <esp_heap_caps.h>
 
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -36,6 +37,8 @@
 #define ETH_MDC_PIN 23
 #define ETH_MDIO_PIN 18
 
+// #define MAX_SOCK_NUM 12 cunstom ethernet.h ->8 to 12
+
 #define USE_SERIAL Serial
 typedef struct
 {
@@ -51,6 +54,11 @@ typedef struct
   bool ntpuse;
 } nvsSystemSet;
 
+struct UserInfo_s
+{
+  char userid[20];
+  char passwd[20];
+};
 const char *host = "esp32";
 const char *ssid = "iftech";
 const char *password = "iftechadmin";
@@ -67,6 +75,7 @@ TaskHandle_t *h_pxModbus;
 /* setup function */
 const char *soft_ap_ssid = "CHA_IFT";
 const char *soft_ap_password = "iftech0273";
+static int webRequestNo = -1;
 
 SimpleCLI cli;
 Command cmd_ls_config;
@@ -83,7 +92,13 @@ void readnWriteEEProm();
 void printDateTime(const RtcDateTime &dt);
 void printLocalTime();
 void logfileRead(int32_t iStart, int32_t iEnd);
+void sendModbusDataToSocket();
+void sendBufferDataToSocket(uint8_t num);
+void logwrite_event();
+void WritHoldeRegister(int address,int len );
+int logCount();
 int clientReadTimeout(int timeout);
+
 // EthernetClient Client;
 WiFiClient Client;
 // EthernetServer telnetServer(23);
@@ -97,7 +112,7 @@ IPAddress dns2(8, 8, 8, 8);
 IPAddress websocketserver(192, 168, 0, 57);
 uint16_t webSocketPort = 81;
 QueueHandle_t h_queue;
-int16_t qRequest[5];
+QueueHandle_t h_sendSocketQueue;
 
 void EthLan8720Start();
 void readInputSerial();
@@ -106,6 +121,7 @@ void littleFsInit();
 void SimpleCLISetUp();
 
 String input = "";
+String sendString = "";
 
 // fnmatch defines
 #define FNM_NOMATCH 1        // Match failed.
@@ -516,7 +532,6 @@ void getNtpTime()
   configTime(gmtOffset_sec, daylightOffset_sec, IPAddress(ipAddress_struct.NTP_1).toString().c_str(), IPAddress(ipAddress_struct.NTP_2).toString().c_str());
   printLocalTime();
 }
-void logWrite();
 void log_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
@@ -527,7 +542,7 @@ void log_configCallback(cmd *cmdPtr)
   Argument strArg = cmd.getArgument("write");
   if (strArg.isSet())
   {
-    logWrite();
+    logwrite_event();
     Client.println("Dump data to file Done.");
     return;
   }
@@ -601,13 +616,72 @@ void time_configCallback(cmd *cmdPtr)
   if (if_modified)
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
 }
-
+void user_configCallback(cmd *cmdPtr)
+{
+  FILE *fp;
+  struct UserInfo_s sUserInfo;
+  Command cmd(cmdPtr);
+  String userid, passwd;
+  Argument strArg = cmd.getArgument("userid");
+  userid = strArg.getValue();
+  strArg = cmd.getArgument("passwd");
+  passwd = strArg.getValue();
+  doc_tx["command_type"] = cmd.getName(); // + String(chp);
+  fp = fopen("/spiffs/user.dat", "r");
+  if (fp == NULL)
+  {
+    fp = fopen("/spiffs/user.dat", "w");
+    if (fp)
+    {
+      strcpy(sUserInfo.userid, "admin");
+      strcpy(sUserInfo.passwd, "admin");
+      fwrite((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
+      fclose(fp);
+      Client.printf("\r\ndefault user and file created try again: %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+      return;
+    }
+    else
+      Client.printf("File point fail!\r\n");
+    return;
+  };
+  int nRead = fread((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
+  Client.printf("\r\nRead  : %d\r\n", nRead);
+  if (userid.length() == 0 && passwd.length() == 0)
+  {
+    Client.printf("\r\nexgist user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+    doc_tx["userid"] = sUserInfo.userid;
+    doc_tx["passwd"] = sUserInfo.passwd;
+    fclose(fp);
+    return;
+  }
+  fclose(fp);
+  fp = fopen("/spiffs/user.dat", "w");
+  if (userid.length() > 0)
+    strcpy(sUserInfo.userid, userid.c_str());
+  if (passwd.length() > 0)
+    strcpy(sUserInfo.passwd, passwd.c_str());
+  if (fp)
+  {
+    fwrite((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
+    Client.printf("\r\nChanged user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+    doc_tx["userid"] = sUserInfo.userid;
+    doc_tx["passwd"] = sUserInfo.passwd;
+    fclose(fp);
+  }
+  return;
+}
 void ls_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
+  Argument arg = cmd.getArgument(0);
+  String argVal = arg.getValue();
+  if (webRequestNo == 1)
+  {
+    doc_tx["command_type"] = cmd.getName(); // + String(chp);
+    doc_tx["reply"] = " Command Succeed";
+  }
   if (!Client.connected())
     return;
-
   listDir("/spiffs/", NULL);
 }
 
@@ -675,14 +749,14 @@ void cat_configCallback(cmd *cmdPtr)
 
   readFromFile(argVal);
 }
-void del_configCallback(cmd *cmdPtr)
-{
-  Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
-  Client.printf(cmd.getName().c_str());
-  Client.printf(" command done\r\n");
-}
+// void del_configCallback(cmd *cmdPtr)
+// {
+//   Command cmd(cmdPtr);
+//   if (!Client.connected())
+//     return;
+//   Client.printf(cmd.getName().c_str());
+//   Client.printf(" command done\r\n");
+// }
 void mv_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
@@ -879,13 +953,20 @@ void errorCallback(cmd_error *errorPtr)
 void SimpleCLISetUp()
 {
   cmd_ls_config = cli.addCommand("ls", ls_configCallback);
-  cmd_ls_config = cli.addCommand("quit", quit_configCallback);
+  cmd_ls_config = cli.addCommand("user", user_configCallback);
+  cmd_ls_config.addArgument("u/serid", "");
+  cmd_ls_config.addArgument("p/asswd", "");
+
+  cmd_ls_config = cli.addCommand("quit", quit_configCallback); // escape telnet
+
   cmd_ls_config = cli.addCommand("log", log_configCallback);
   cmd_ls_config.addFlagArgument("w/rite");
   cmd_ls_config.addFlagArgument("r/ead");     // all data read
   cmd_ls_config.addArgument("nr/ead", "-1");  // n data read
   cmd_ls_config.addArgument("nu/mber", "10"); // n data read
+
   cmd_ls_config = cli.addCommand("init", init_configCallback);
+
   cmd_ls_config = cli.addCommand("time", time_configCallback);
   cmd_ls_config.addFlagArgument("s/et");
   cmd_ls_config.addArgument("n/tpuse", "255");
@@ -893,12 +974,16 @@ void SimpleCLISetUp()
   cmd_ls_config.addArgument("ntp2", 0); // kr.pool.ntp.org
 
   cmd_ls_config = cli.addSingleArgCmd("rm", rm_configCallback);
+
   cmd_ls_config = cli.addSingleArgCmd("cat", cat_configCallback);
+
   cmd_ls_config = cli.addSingleArgCmd("reboot", reboot_configCallback);
+
   // cmd_ls_config = cli.addSingleArgCmd("mkdir", mkdir_configCallback);
   //  cmd_ls_config.addArgument("filename","");
-  cmd_ls_config = cli.addCommand("del", del_configCallback);
+  // cmd_ls_config = cli.addCommand("del", del_configCallback);
   cmd_ls_config = cli.addCommand("mv", mv_configCallback);
+
   cmd_ls_config = cli.addCommand("ip", ip_configCallback);
   cmd_ls_config.addFlagArgument("s/et");
   cmd_ls_config.addArgument("i/paddr", "192.168.0.57");
@@ -910,6 +995,7 @@ void SimpleCLISetUp()
   cmd_ls_config.addArgument("dns2", "164.124.101.2");
 
   cmd_ls_config = cli.addCommand("date", date_configCallback);
+
   cmd_ls_config = cli.addCommand("df", df_configCallback);
 
   cli.setOnError(errorCallback);
@@ -1040,14 +1126,48 @@ void littleFsInit()
   }
 }
 
+void sendBufferDataToSocket(uint8_t num)
+{
+  // doc_tx.clear();
+  // doc_tx["command_type"] = "clicommand";
+  // sendString = "";
+  // serializeJson(doc_tx, sendString);
+  // webSocket.broadcastTXT(sendString);
+  // doc_tx["command_type"] = sendString; // + String(chp);
+  webRequestNo = -1;
+  sendString = "";
+  serializeJson(doc_tx, sendString);
+  webSocket.sendTXT(num, sendString);
+}
+void sendModbusDataToSocket()
+{
+  time_t nowTime;
+  time(&nowTime);
+  doc_tx.clear();
+
+  doc_tx["time"] = nowTime - gmtOffset_sec;
+  doc_tx["command_type"] = "modbus";
+  JsonArray modbusValues = doc_tx.createNestedArray("value");
+  xSemaphoreTake(xMutex, portMAX_DELAY);
+  for (int i = 0; i < 60; i++)
+  {
+    modbusValues.add(modBusData.Data[i]);
+  }
+  xSemaphoreGive(xMutex);
+
+  sendString = "";
+  serializeJson(doc_tx, sendString);
+  webSocket.broadcastTXT(sendString);
+
+  String payload = "";
+}
+// static bool webRequestNo = false;
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 {
   DeserializationError de_err;
-  String sendString = "";
+  uint16_t readc = 1;
   // JsonArray modbusType;
-  JsonArray modbusValues;
-  JsonObject object;
-  time_t nowTime;
+  // JsonObject object;
   switch (type)
   {
   case WStype_DISCONNECTED:
@@ -1059,48 +1179,85 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     printf("[%u] Connected from %d.%d.%d.%d url: %s\r\n", num, ip[0], ip[1], ip[2], ip[3], payload);
 
     // send message to client
-    object = doc_tx.to<JsonObject>();
-    object["status"] = "connected";
+    // object = doc_tx.to<JsonObject>();
+    doc_tx["status"] = "connected";
 
+    sendString = "";
     serializeJson(doc_tx, sendString);
     webSocket.sendTXT(num, sendString);
   }
   break;
   case WStype_TEXT:
+    // JSON이 아닌 일반 커맨드를 먼저 확인한다.
+    if (strcmp((const char *)payload, "log_download") == 0)
+    {
+      webSocket.sendTXT(num, "log_download");
+      FILE *fp = fopen("/spiffs/logFile.dat", "r");
+      if (fp == NULL)
+      {
+        webSocket.sendTXT(num, "File Not Fount");
+        break;
+      }
+
+      modBusData_t logData;
+      while (!feof(fp))
+      {
+        readc = fread((byte *)&logData, sizeof(modBusData_t), 1, fp);
+        if (readc == 1)
+        {
+          byte *p = (byte *)&logData;
+          // webSocket.sendBIN(num,p, sizeof(modBusData_t));
+          webSocket.sendBIN(num, p, sizeof(modBusData_t));
+        }
+        else
+        {
+          Serial.println("Error occured..");
+        }
+      }
+      fclose(fp);
+      webSocket.sendTXT(num, "download_complete");
+      break;
+    }
     de_err = deserializeJson(doc_tx, payload);
     if (de_err)
     {
       printf("");
-      return;
+      break;
     }
     else
     {
-      const char *req_type = doc_tx["type"].as<const char *>();
-      if (!String(req_type).compareTo("command"))
+      const char *req_type = doc_tx["command_type"].as<const char *>();
+
+      if (!String(req_type).compareTo("logRead"))
+      {
+        int reg = doc_tx["reg"].as<int>();
+        int set = doc_tx["set"].as<int>();
+        sendString = "Log File Send ";
+        // sendString += String(reg);
+        // sendString  += " ";
+        // sendString += String(set);
+        doc_tx["command_type"] = sendString; // + String(chp);
+        webRequestNo = -1;
+        sendString = "";
+        serializeJson(doc_tx, sendString);
+        webSocket.sendTXT(num, sendString);
+      }
+      else if (!String(req_type).compareTo("ModBusSet"))
       {
         int reg = doc_tx["reg"].as<int>();
         int set = doc_tx["set"].as<int>();
 
-        xSemaphoreTake(xMutex, portMAX_DELAY);
+        // xSemaphoreTake(xMutex, portMAX_DELAY);
         modBusData.Data[reg] = set;
-        xSemaphoreGive(xMutex);
+        // xSemaphoreGive(xMutex);
 
-        // if (Client.connected())
-        //   Client.printf("Data Received From web reg:0x%x set:0x%x\r\n", reg, set);
-        // for (int ii = 0; ii < 30; ii++)
-        //   if (Client.connected())
-        //     Client.printf("%x ", modBusData.Data[ii]);
-        memset(qRequest, 0x00, 5);
-        qRequest[0] = 0x06;
-        qRequest[1] = reg;
-        qRequest[2] = set;
-        // if (Client.connected())
-        //   Client.printf("Emputy Queue\n\r");
-        // if (Client.connected())
-        //   Client.printf("Sent to Queue\n\r");
-        // for (int ii = 0; ii < 5; ii++)
-        //   Client.printf("0x%x ", qRequest[ii]);
-        xQueueSend(h_queue, &qRequest, (TickType_t)0);
+        // int16_t qRequest[5];
+        // memset(qRequest, 0x00, 5);
+        // qRequest[0] = 0x06;
+        // qRequest[1] = reg;
+        // qRequest[2] = set;
+        WritHoldeRegister(reg,set);
+        //xQueueSend(h_queue, &qRequest, (TickType_t)0);
       }
       else if (!String(req_type).compareTo("timeSet"))
       {
@@ -1123,48 +1280,25 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         Rtc.SetDateTime(dt);
         ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
       }
+      else
+      {
+        doc_tx.clear();
+        // doc_tx["command_type"] = req_type; // + String(chp);
+        //  doc_tx["reg"]
+        //  doc_tx["set"]
+        webRequestNo = 1;
+        cli.parse(req_type);
+        // char req_buf[2000];
+        // strncpy(req_buf, req_type, strlen(req_type));
+        // strcat(req_buf,sendString.c_str());
+
+        int16_t qSocketSendRequest[5];
+        qSocketSendRequest[0] = 0x0A;
+        qSocketSendRequest[1] = num;
+        qSocketSendRequest[2] = 0x00;
+        xQueueSend(h_sendSocketQueue, &qSocketSendRequest, (TickType_t)0);
+      }
     }
-
-    time(&nowTime);
-    doc_tx.clear();
-
-    object = doc_tx.to<JsonObject>();
-    object["time"] = nowTime;
-    object["type"] = "modbus";
-    // modbusType = doc_tx.createNestedArray("type");
-    // modbusType.add("modbus");
-    modbusValues = doc_tx.createNestedArray("value");
-    xSemaphoreTake(xMutex, portMAX_DELAY);
-    for (int i = 0; i < 60; i++)
-    {
-      modbusValues.add(modBusData.Data[i]);
-      // printf(" [%d] %d, ", i, modBusData.Data[i]);
-    }
-    xSemaphoreGive(xMutex);
-
-    serializeJson(doc_tx, sendString);
-    webSocket.sendTXT(num, sendString);
-
-    printf("[%u] get Text: %s\r\n", num, payload);
-    printf("[%u] send Text: %s\r\n", num, sendString);
-    // const message = JSON.parse(data);
-    // //console.log(message);
-    // if (message.type == 'modbus') {
-    //     console.log(message);
-    // }
-    // if (message.type == 'command') {
-    //     modubus_data[message.reg] = message.set;
-    //     console.log(message.set);
-    //     console.log(message.reg);
-    // }
-    // connections.forEach((client) => {
-    //     client.send(JSON.stringify(modubus_data));
-    // })
-    // send message to client
-    // webSocket.sendTXT(num, "message here");
-
-    // send data to all connected clients
-    // webSocket.broadcastTXT("message here");
     break;
   case WStype_BIN:
     printf("[%u] get binary length: %u\r\n", num, length);
@@ -1464,16 +1598,46 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
 }
 
 /* LOG redirection */
-static int writeToUdp(void *cookie, const char *data, int size)
+int telnet_write(const char *format, va_list ap)
 {
-  // udp.broadcastTo(data, 1234);
-  if (Client.connected())
+  char *buf = (char *)ps_malloc(1024);
+  if (buf == NULL)
   {
-    Client.printf(data);
-    Client.flush();
+    // failed to allocate memory from PSRAM, log an error message
+    ESP_LOGE("telnet_write", "Failed to allocate memory from PSRAM");
+    return -1;
   }
-  return 0;
+  vsnprintf(buf, 512, format, ap);
+  int len = strlen(buf);
+
+  if (Client.connected())
+    Client.write(buf, len);
+  free(buf);
+  return len;
 }
+// int telnet_write(void *ptr, const char *buf, int len, void *userdata)
+// {
+//   // Cast the userdata pointer to a pointer to the telnet client object
+//   // TelnetClient *client = (TelnetClient*)userdata;
+
+//   // Write data to the telnet client's output stream
+//   int n = Client.write(buf, len);
+
+//   // Return the number of bytes written
+//   return n;
+// }
+// static int telnet_print(char *ptr, int len, void *userdata)
+// {
+//   // udp.broadcastTo(data, 1234);
+//   //WiFiClient *client= (WiFiClient *)userdata;
+//   if (Client.connected())
+//   {
+//     //Client = (WiFiClient  *)userdata;
+//     Client.printf(ptr);
+//     Client.flush();
+//   }
+//   return 0;
+// }
 void telnetServerCheckClient()
 {
   if (!ETH.linkUp())
@@ -1536,21 +1700,36 @@ void readnWriteEEProm()
   websocketserver = IPAddress(ipAddress_struct.WEBSOCKETSERVER);
   webSocketPort = ipAddress_struct.WEBSERVERPORT;
 }
+
+// /*     여기 까지    */
+int logCount()
+{
+  struct stat st;
+  int statok;
+  statok = stat("/spiffs/logFile.dat", &st);
+  if (statok >= 0)
+    return st.st_size / sizeof(modBusData_t);
+  return -1;
+}
 void logfileRead(int32_t iStart, int32_t iEnd)
 {
   modBusData_t logData;
-  FILE *fp = fopen("/spiffs/logFile.bin", "r");
+  FILE *fp = fopen("/spiffs/logFile.dat", "r");
+  if (fp == NULL)
+    return;
   uint16_t readc = 1, icount = 0;
   JsonArray modbusValues;
   String output;
+  int iLog = logCount();
   while (!feof(fp))
   {
     readc = fread((byte *)&logData, sizeof(modBusData_t), sizeof(byte), fp);
+    Client.printf("\r\nreadc %d %d %d %d ", readc, icount, iStart, iEnd);
     if (icount >= iStart && icount < iEnd)
     {
       if (readc)
       {
-        Client.printf("\r\n%d %s\t", icount, ctime((time_t *)&logData.logTime));
+        Client.printf("\r\n%d/%d %s\t", icount, iLog, ctime((time_t *)&logData.logTime));
         doc_tx.clear();
         doc_tx["time"] = logData.logTime;
         modbusValues = doc_tx.createNestedArray("value");
@@ -1562,6 +1741,7 @@ void logfileRead(int32_t iStart, int32_t iEnd)
     }
     icount++;
   }
+  fclose(fp);
 }
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
@@ -1637,9 +1817,13 @@ void setup()
   EEPROM.begin(100);
   setRtc();
 
+  int16_t qSocketSendRequest[5];
+  int16_t qRequest[5];
   memset(qRequest, 0x00, 5);
+  memset(qSocketSendRequest, 0x00, 5);
   h_queue = xQueueCreate(5, sizeof(qRequest));
-  if (h_queue == 0)
+  h_sendSocketQueue = xQueueCreate(5, sizeof(qSocketSendRequest));
+  if (h_queue == 0 || h_sendSocketQueue == 0)
   {
     printf("\r\nFailed to create queue= %p\n", h_queue);
   }
@@ -1676,10 +1860,11 @@ void setup()
 
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
-  // stdout = fwopen(NULL, &writeToUdp);
+  // stdout = fwopen(NULL, &telnet_print);
   xMutex = xSemaphoreCreateMutex();
   xTaskCreate(modbusRequest, "modbus", 2000, NULL, 1, h_pxModbus);
-  stdout = funopen(NULL, NULL, &writeToUdp, NULL, NULL);
+  // stdout = funopen(NULL, NULL, telnet_print, 0, NULL/*Client*/);
+  esp_log_set_vprintf(telnet_write);
 }
 
 unsigned long previousmills = 0;
@@ -1692,23 +1877,28 @@ void loop()
   webSocket.loop();
   telnetServerCheckClient();
   unsigned long now = millis();
-  String sendString = "";
-
+  sendString = "";
   time_t nowTime;
+  int16_t rRequest[5];
+  if (xQueueReceive(h_sendSocketQueue, &rRequest, (TickType_t)5))
+  {
+    // rRequest[0] = 0x06; request to send Modbus data
+    //[1] = FIRST_REGISTER;
+    //[2] = NUM_VALUES;
+    if (rRequest[0] == 0x06)
+      sendModbusDataToSocket();
+    if (rRequest[0] == 0x0A)
+      sendBufferDataToSocket(rRequest[1]);
+  }
+
   if (now - previousmills > interval)
   {
-    JsonObject object = doc_tx.to<JsonObject>();
     time(&nowTime);
-    object["type"] = "time";
-    object["time"] = nowTime - gmtOffset_sec;
-    // object["rand2"]=random(100);
+    doc_tx["command_type"] = "time";
+    doc_tx["time"] = nowTime - gmtOffset_sec;
     serializeJson(doc_tx, sendString);
-
-    // ESP_LOGD(TAG, "\n%s", sendString);
     webSocket.broadcastTXT(sendString);
     previousmills = now;
-    // modbus request
-    // modbusRequest();
   }
   delay(1);
 }
@@ -1731,3 +1921,27 @@ void loop()
 //   fin.close();
 //   Serial.print("\r\nFileRead OK");
 // }
+
+// const message = JSON.parse(data);
+// //console.log(message);
+// if (message.command_type== 'modbus') {
+//     console.log(message);
+// }
+// if (message.command_type== 'command_type') {
+//     modubus_data[message.reg] = message.set;
+//     console.log(message.set);
+//     console.log(message.reg);
+// }
+// connections.forEach((client) => {
+//     client.send(JSON.stringify(modubus_data));
+// })
+// send message to client
+// webSocket.sendTXT(num, "message here");
+
+// send data to all connected clients
+// webSocket.broadcastTXT("message here");
+// object["rand2"]=random(100);
+// ESP_LOGD(TAG, "\n%s", sendString);
+// JsonObject object = doc_tx.to<JsonObject>();
+// modbus request
+// modbusRequest();

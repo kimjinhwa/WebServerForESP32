@@ -1,10 +1,12 @@
 html {
     min-width: 850px;
+    min-height: 1000px;
+    /* max-width: 1050px; */
 }
 
 body {
     /* width: 850px; */
-    margin: 100 px;
+    /* margin: 100 px; */
 }
 
 a {
@@ -17,28 +19,42 @@ a {
     display: flex;
     justify-content: center;
     align-items: center;
-    ;
+    
     color: white;
 }
 
-.chargeInfo {
+.HtmlMainView {
     display: flex;
     justify-content: center;
-    margin-top: 20px;
-    margin-left: 10px;
-    margin-right: 10px;
+    align-items: center;
+}
+.chargeInfo {
+    display: flex;
+    margin-top: 10px;
+    /* justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-left: 5%;
+    margin-right: 5%;
+    min-width: 1000px;
+    max-width: 1000px; */
+    /* margin-right: 10px; */
     /* align-items */
 }
-
-/* .chargerStatus{
-    margin-top: 0px;
-} */
 .inputStatus {
     padding-right: 30px;
 }
+.chargerStatus {
+    margin-left: 5px;
+    margin-right: 5px;
+    text-align: center;
+    width: fit-content;
+}
 
 .batteryStatus {
-    padding-left: 30px;
+    /* padding-left: 30px;
+    margin-right: 150px; */
+    text-align: center;
 }
 
 .inputStatus td,
@@ -47,13 +63,15 @@ a {
 .batteryStatus th {
     border: 1px solid #ddd;
     padding: 18px;
+    text-align: center;
 }
 
 .chargerStatus td,
 .chargerStatus th {
     border: 0px solid #ddd;
-    padding-left: 25px;
-    padding-right: 25px;
+    padding-left: 15px;
+    padding-right: 15px;
+    text-align: center;
 }
 
 .inputStatus tr:nth-child(even) {
@@ -84,7 +102,7 @@ a {
 .batteryStatus th {
     padding-top: 12px;
     padding-bottom: 12px;
-    text-align: left;
+    text-align: center;
     background-color: #04AA6D;
     color: white;
 }
@@ -159,4 +177,27 @@ a {
     ;
     color: white;
     text-align: center;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  text-align: left;
+  padding: 8px;
+}
+
+tr:nth-child(even){background-color: #f2f2f2}
+
+th {
+  background-color: #04AA6D;
+  color: white;
+}
+.messageBar{
+    color: #4404aa;
+}
+#statusBar{
+    font-size:xx-small; 
+    color: rgb(15, 19, 19);
 }

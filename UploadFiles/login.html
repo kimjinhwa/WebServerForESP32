@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="login.css" />
+    <title>SNMP WEB MONITERING SYSTEM</title>
+</head>
+
+<body>
+    <div id="loginForm" method="post">
+        <h1>SNMP MONITERING SYTEM</h1>
+        <input name="userid" placeholder="User ID" />
+        <input name="passwd" placeholder="Password" type="Password" />
+        <input type="button" class="btn" id="loginBtn" click="formLogin" value="로그인" />
+    </div>
+    <script defer>
+        const webSocket = new WebSocket('ws://' + '192.168.0.57' + ':81/');
+        var users = {
+            user1: 'passwd1',
+        };
+        webSocket.onopen = (event) => {
+            console.log("websocket connected...")
+            const data = JSON.stringify({ 'command_type': 'user', 'reg': 0, 'set': 0 }); /* BIT 12 =0 열림*/
+            console.log(data);
+            webSocket.send(data);
+        }
+        webSocket.onmessage = async (event) => {
+            try {
+                data = JSON.parse(event.data);
+                console.log(data);
+            } catch (error) {
+                return;
+            }
+            if (data.command_type == "user") {
+                users[data.userid] = data.passwd;
+            }
+
+        }
+        document.getElementById('loginBtn').addEventListener('click', (e) => {
+            var userid = document.getElementsByName('userid')[0].value;
+            var passwd = document.getElementsByName('passwd')[0].value;
+
+
+            login(userid, passwd);
+        });
+        //      document.getElementById('loginForm').onsubmit = function () {
+        function login(userid, passwd) {
+            if (users[userid] && users[userid] === passwd) {
+                // Set the login cookie with an expiration time of 7 days from now
+                setCookie(
+                    'login',
+                    new Date(
+                        new Date().getTime() + 7 * 24 * 60 * 60 * 1000
+                    ).toUTCString(),
+                    new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+                );
+                // Redirect the user to the index page
+                window.location.href = 'index.html';
+            } else {
+                alert(
+                    '사용자 이름 혹은 비밀번호가 잘못 되었습니다. \r\n다시 입력해 주세요'
+                );
+            }
+        }
+        window.onload = checkLoginStatus;
+
+        function checkLoginStatus() {
+            var loginCookie = getCookie('login');
+            if (loginCookie && new Date() < new Date(loginCookie)) {
+                window.location.href = 'index.html';
+                return true;
+            }
+            return false;
+        }
+        function getCookie(name) {
+            var nameEQ = name + '=';
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i];
+                while (cookie.charAt(0) == ' ') {
+                    cookie = cookie.substring(1, cookie.length);
+                }
+                if (cookie.indexOf(nameEQ) == 0) {
+                    return cookie.substring(nameEQ.length, cookie.length);
+                }
+            }
+            return null;
+        }
+        function setCookie(name, value, expires) {
+            var cookie =
+                name +
+                '=' +
+                value +
+                '; expires=' +
+                expires.toUTCString() +
+                '; path=/';
+            document.cookie = cookie;
+        }
+    </script>
+</body>
+
+</html>

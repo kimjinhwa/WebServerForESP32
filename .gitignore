@@ -4,5 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 src/esp32_8720_arduino.code-workspace
+UploadFiles/webServer-serial - Shortcut.lnk
 doc/
 *~
