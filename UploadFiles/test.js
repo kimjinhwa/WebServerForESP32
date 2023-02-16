@@ -65,16 +65,17 @@ class modBusDataClass {
         let checkRegister = this.Register_12 ^ this.prevRegister_12;
         bitToCheck12_event.forEach((bitIndex) => {
             checkRegister;  // 변경된 값만이 존재 하며 변경된 부분은 1로 설정되어 있다 
-            console.log(`checkRegister:${checkRegister}`)
+            //console.log(`checkRegister:${checkRegister}`)
             const bitValue = checkRegister & (1 << bitIndex);// 12번지에 셋팅되어 있는 비트에 맞는 메세지를 가져온다.   
             //이제 bitValue가 1이면 bitIndex에 해당 하는 비트가 변경되었다는 뜻이다. 
             // 그리고 현재의 값이 O인지 1인지에 따른 메세지를 출력하자 
-            console.log(`bitValue:${bitValue}`)
+            //console.log(`bitValue:${bitValue}`)
             const nowBitValue = this.Register_12 & (1 << bitIndex);
             const message = this.getMessage(bitIndex, bitValue, nowBitValue);
-            if (message) console.log(`message :${message.message}`)
+            //if (message) console.log(`message :${message.message}`)
             if (message) {
                 // add message to event or alarm list based on condition
+                //모든 이벤트는 기록한다. 단 alarm은 alarm만 기록한다
                 eventList.push(message.message); // if exgist, all event must recored.
                 if (message.type === 'alarm') {  //alarm으로 기록된 것만 여기에 기록한다.
                     alarmList.push(message.message);
@@ -91,7 +92,7 @@ class modBusDataClass {
                     this.justOnlyEvent.push({ logTime: this.logTime, events: eventList });
                 }
                 if (alarmList.length > 0) {
-                    this.alarmEvent.push({ logTime: this.logTime, alarms: alarmList });
+                    this.alarmEvent.push({ logTime: this.logTime, events: alarmList });
                 }
                 this.stringfyModBus60 = newModBus60;
             }
@@ -150,8 +151,8 @@ class modbusDataArrayClass {
         this.dataView = new DataView(this.arrayBuffer);
 
         this.dataView.setUint32(0, (new Date()).getTime() / 1000, 1);
-        console.log((new Date()).getTime() / 1000);
-        console.log(this.dataView.getUint32(0, 1));
+        //console.log((new Date()).getTime() / 1000);
+        //console.log(this.dataView.getUint32(0, 1));
         this.dataView.setInt16(4 + 24, 0b0000111000000000, 1);
         this.logTime = this.dataView.getUint32(0, 1);
         // 새로운 인스턴스를 만들지만 만들어지 cmdBus는 Array에 들어가지 
@@ -174,7 +175,31 @@ class modbusDataArrayClass {
 
         this.cmodBus = new modBusDataClass(this.dataView.buffer, this.justOnlyEvent, this.alarmEvent, this.modBusDataArray);
     }
-    printEvent() {
+
+    printTableContent(eventAlarmData, tbody, tr, td) {
+        eventAlarmData.forEach(ev => {
+            //console.log(ev.events);
+            tr = document.createElement("tr");
+            td = document.createElement("td");
+            td.innerHTML = `${(new Date(ev.logTime * 1000)).getFullYear()}/${(new Date(ev.logTime * 1000)).getMonth() + 1}/${(new Date(ev.logTime * 1000)).getDay()} ${(new Date(ev.logTime * 1000)).getHours()}:${(new Date(ev.logTime * 1000)).getMinutes()}:${(new Date(ev.logTime * 1000)).getSeconds()} `;
+            td.style.border = "1px solid black";
+            tr.appendChild(td);
+            td = document.createElement("td");
+            ev.events.forEach(etdata => {
+                td.innerHTML += etdata + "<br>";
+            });
+            td.style.border = "1px solid black";
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+
+        });
+
+    };
+    printEvent(eventAlarmData, heading) {
+        let logHeading = document.createElement("h1");
+        logHeading.innerHTML = heading;
+        document.getElementById('HtmlLogView').appendChild(logHeading);
+        //document.body.appendChild(logHeading);
         let table = document.createElement("table");
         table.style.border = "1px solid black";
         //   for (var i = 0; i < lines.length; i++) {
@@ -194,61 +219,29 @@ class modbusDataArrayClass {
 
         thead.appendChild(tr);
         table.appendChild(thead);
-        var tr;
-        var td;
+        var tr, td;
         var tbody = document.createElement("tbody");
 
-        this.justOnlyEvent.forEach(ev => {
-            console.log(ev.events);
-            tr = document.createElement("tr");
-            td = document.createElement("td");
-            td.innerHTML = `${(new Date(ev.logTime * 1000)).getFullYear()}/${(new Date(ev.logTime * 1000)).getMonth() + 1}/${(new Date(ev.logTime * 1000)).getDay()} ${(new Date(ev.logTime * 1000)).getHours()}:${(new Date(ev.logTime * 1000)).getMinutes()}:${(new Date(ev.logTime * 1000)).getSeconds()} `;
-            td.style.border = "1px solid black";
-            tr.appendChild(td);
-            td = document.createElement("td");
-            ev.events.forEach(et => {
-                td.innerHTML += et + "<br>";
-            });
-            td.style.border = "1px solid black";
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-
-        });
-
-
+        this.printTableContent(eventAlarmData, tbody, tr, td);
+        //this.printTableContent(this.justOnlyEvent, tbody, tr, td);
 
         table.appendChild(tbody);
-        document.body.appendChild(table);
-
-
-        //  var row = table.insertRow();
-        //  var cell = row.insertCell();
-        //  cell.innerHTML="test1";
-        //  row = table.insertRow();
-        //  cell = row.insertCell();
-        //  cell.innerHTML="test2";
-        //     cell.innerHTML = lines[i];
-        //   }
-        console.log(this.justOnlyEvent)
-        this.justOnlyEvent.forEach(ev => {
-            console.log(ev.events)
-        });
-    }
-    printAlarm() {
-        console.log(this.justOnlyEvent)
-        this.alarmEvent.forEach(er => {
-            console.log(er.alarms)
-        });
+        //document.body.appendChild(table);
+        document.getElementById('HtmlLogView').appendChild(table);
+        //document.getElementById('HtmlLogView').style.display= "none";
     }
 }
 async function testClassCode() {
     let modData = new modbusDataArrayClass();
     let int16Array = new Uint8Array(124);
     modData.addDataArray(int16Array, 0b0000111000000101);
-    // await new Promise(resolve =>setTimeout(resolve,2000));
-    // modData.addDataArray(int16Array,0b0000111000000100);
-    modData.printEvent();
-    //modData.printAlarm();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    modData.addDataArray(int16Array, 0b0000111000000100);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    modData.addDataArray(int16Array, 0b0000111000000000);
+    modData.printEvent(modData.alarmEvent.reverse(), "Alarm Log");
+    modData.printEvent(modData.justOnlyEvent.reverse(), "Event Log");
+    //modData.printAlarm("AlarmLog");
 
 }
 testClassCode();
