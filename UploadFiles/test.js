@@ -39,7 +39,7 @@ class modBusDataClass {
                 this.prevRegister_14 ^ this.Register_14 ||
                 this.prevRegister_15 ^ this.Register_15
             ) {
-                console.log("log changed " + this.prevRegister_12);
+                //console.log("log changed " + this.prevRegister_12);
                 this.processModBus60();
                 modBusDataArray.push(this);
             }
@@ -73,7 +73,7 @@ class modBusDataClass {
         // add log time and event/alarm list to appropriate array only if there are changes
         if (eventList.length > 0 || alarmList.length > 0) {
             const newModBus60 = JSON.stringify(this.modBus60); // get the stringified modBus60
-            console.log(newModBus60);
+            //console.log(newModBus60);
             if (this.stringfyModBus60 === null || this.stringfyModBus60 !== newModBus60) {
                 // save the changes only if there are no previous data or the current data is different from the previous data
                 if (eventList.length > 0) {
@@ -109,7 +109,7 @@ class modBusDataClass {
         };
 
         const message = messages_12[bitIndex];
-        console.log(`bitIndex:${bitIndex} bitValue ${bitValue} prebit ${prevbitValue}`)
+        //console.log(`bitIndex:${bitIndex} bitValue ${bitValue} prebit ${prevbitValue}`)
         //if (this.prevIndex === -1) //처음이면 prebitr은 고려하지 않는다.
         if (message) {
             if (message.trigger === 0) {
@@ -142,7 +142,9 @@ class modbusDataArrayClass {
         this.arrayBuffer = this.int16Array.buffer;
         this.dataView = new DataView(this.arrayBuffer);
 
-        this.dataView.setUint32(0, (new Date()).getTime(), 1);
+        this.dataView.setUint32(0, (new Date()).getTime()/1000, 1);
+        console.log((new Date()).getTime()/1000);
+        console.log(this.dataView.getUint32(0,1));
         this.dataView.setInt16(4 + 24, 0b0000111000000000, 1);
         this.logTime = this.dataView.getUint32(0, 1);
         // 새로운 인스턴스를 만들지만 만들어지 cmdBus는 Array에 들어가지 
@@ -159,13 +161,67 @@ class modbusDataArrayClass {
         this.int16Array = new Uint8Array( dataArrayBuffer);
         this.arrayBuffer = this.int16Array.buffer;
         this.dataView = new DataView(this.arrayBuffer);
-        this.dataView.setUint32(0, (new Date()).getTime(), 1);
+        this.dataView.setUint32(0, (new Date()).getTime()/1000, 1);
         this.dataView.setInt16(4 + 24, event12, 1);
         this.logTime = this.dataView.getUint32(0, 1);
 
         this.cmodBus = new modBusDataClass(this.dataView.buffer,this.justOnlyEvent,this.alarmEvent,this.modBusDataArray  );
     }
     printEvent(){
+       let table = document.createElement("table");
+       table.style.border = "1px solid black";
+//   for (var i = 0; i < lines.length; i++) {
+    var thead = document.createElement("thead");
+    var tr = document.createElement("tr");
+
+    var th = document.createElement("th");
+    th.innerHTML = "Time";
+    th.style.border = "1px solid black";
+    tr.appendChild(th);
+
+    var th = document.createElement("th");
+    th.innerHTML = "Event Data";
+    th.style.border = "1px solid black";
+    tr.appendChild(th);
+
+
+    thead.appendChild(tr);
+    table.appendChild(thead);
+    var tr;
+    var td ;
+    var tbody = document.createElement("tbody");
+
+       this.justOnlyEvent.forEach(ev => {
+        console.log(ev.events);
+        tr = document.createElement("tr");
+            td = document.createElement("td");
+            td.innerHTML=`${(new Date(ev.logTime*1000)).getFullYear()}/${(new Date(ev.logTime*1000)).getMonth()+1}/${(new Date(ev.logTime*1000)).getDay()} ${(new Date(ev.logTime*1000)).getHours()}:${(new Date(ev.logTime*1000)).getMinutes()}:${(new Date(ev.logTime*1000)).getSeconds()} `;
+            td.style.border = "1px solid black";
+        tr.appendChild(td);
+            td = document.createElement("td");
+            ev.events.forEach(et=>{
+                td.innerHTML+=et+"<br>";
+            });
+            td.style.border = "1px solid black";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+
+       });
+
+
+
+     table.appendChild(tbody);
+     document.body.appendChild(table);
+    
+
+    //  var row = table.insertRow();
+    //  var cell = row.insertCell();
+    //  cell.innerHTML="test1";
+    //  row = table.insertRow();
+    //  cell = row.insertCell();
+    //  cell.innerHTML="test2";
+//     cell.innerHTML = lines[i];
+//   }
        console.log(this.justOnlyEvent)
        this.justOnlyEvent.forEach(ev => {
         console.log(ev.events)
@@ -181,7 +237,7 @@ class modbusDataArrayClass {
 let modData = new modbusDataArrayClass();
 let int16Array = new Uint8Array(124);
 modData.addDataArray(int16Array,0b0000111000000001);
-modData.addDataArray(int16Array,0b0000111000000100);
+modData.addDataArray(int16Array,0b0000111000000101);
 modData.printEvent();
 modData.printAlarm();
 
