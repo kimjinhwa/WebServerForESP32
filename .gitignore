@@ -5,5 +5,7 @@
 .vscode/ipch
 src/esp32_8720_arduino.code-workspace
 UploadFiles/webServer-serial - Shortcut.lnk
+UploadFiles/test1.js
 doc/
 *~
+
