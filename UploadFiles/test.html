@@ -2,21 +2,117 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="">
     <title>Document</title>
     <link rel="stylesheet" href="index.css" />
     <script src="test.js" defer></script>
-    <audio id="warning-sound" src="bell-ringing.mp3" ></audio>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.0/dist/svg.min.js"></script>
+    <audio id="warning-sound" src="bell-ringing.mp3" autoplay="false" muted="muted"></audio>
 </head>
 
 <body>
-    <div id="HtmlLogView">
-        <h1 id="idlog">LogView</h1>
-    </div>
+    <div class="drawing" id="drawing"></div>
+
 
     <button id="showButton">START alarm</button>
     <button id="stopButton">Stop alarm</button>
+    <br>
+    <section id="BitLabelInof">Bit No_HL
+        <label for="">15</label>
+        <label for="">14</label>
+        <label for="">13</label>
+        <label for="">12</label>
+        <label for="">_11</label>
+        <label for="">10</label>
+        <label for="">_09</label>
+        <label for="">08</label>
+        <label for="">07</label>
+        <label for="">_06</label>
+        <label for="">05</label>
+        <label for="">_04</label>
+        <label for="">_03</label>
+        <label for="">02</label>
+        <label for="">01</label>
+        <label for="">00</label>
+    </section>
+    <section id="alarm12">register12
+        <input type=checkbox id="12regbit_0"></chekbox>
+        <input type=checkbox id="12regbit_1"></chekbox>
+        <input type=checkbox id="12regbit_2"></chekbox>
+        <input type=checkbox id="12regbit_3"></chekbox>
+        <input type=checkbox id="12regbit_4" checked></chekbox>
+        <input type=checkbox id="12regbit_5" checked></chekbox>
+        <input type=checkbox id="12regbit_6" checked></chekbox>
+        <input type=checkbox id="12regbit_7"></chekbox>
+        <input type=checkbox id="12regbit_8"></chekbox>
+        <input type=checkbox id="12regbit_9"></chekbox>
+        <input type=checkbox id="12regbit_10"></chekbox>
+        <input type=checkbox id="12regbit_11"></chekbox>
+        <input type=checkbox id="12regbit_12"></chekbox>
+        <input type=checkbox id="12regbit_13"></chekbox>
+        <input type=checkbox id="12regbit_14"></chekbox>
+        <input type=checkbox id="12regbit_15"></chekbox>
+    </section>
+    <section id="alarm13">register13
+        <input type=checkbox id="13regbit_0"></chekbox>
+        <input type=checkbox id="13regbit_1"></chekbox>
+        <input type=checkbox id="13regbit_2"></chekbox>
+        <input type=checkbox id="13regbit_3"></chekbox>
+        <input type=checkbox id="13regbit_4"></chekbox>
+        <input type=checkbox id="13regbit_5"></chekbox>
+        <input type=checkbox id="13regbit_6"></chekbox>
+        <input type=checkbox id="13regbit_7"></chekbox>
+        <input type=checkbox id="13regbit_8"></chekbox>
+        <input type=checkbox id="13regbit_9"></chekbox>
+        <input type=checkbox id="13regbit_10"></chekbox>
+        <input type=checkbox id="13regbit_11"></chekbox>
+        <input type=checkbox id="13regbit_12"></chekbox>
+        <input type=checkbox id="13regbit_13"></chekbox>
+        <input type=checkbox id="13regbit_14" checked></chekbox>
+        <input type=checkbox id="13regbit_15" checked></chekbox>
+    </section>
+    <section id="alarm14">register14
+        <input type=checkbox id="14regbit_0"></chekbox>
+        <input type=checkbox id="14regbit_1"></chekbox>
+        <input type=checkbox id="14regbit_2"></chekbox>
+        <input type=checkbox id="14regbit_3"></chekbox>
+        <input type=checkbox id="14regbit_4"></chekbox>
+        <input type=checkbox id="14regbit_5"></chekbox>
+        <input type=checkbox id="14regbit_6"></chekbox>
+        <input type=checkbox id="14regbit_7"></chekbox>
+        <input type=checkbox id="14regbit_8"></chekbox>
+        <input type=checkbox id="14regbit_9"></chekbox>
+        <input type=checkbox id="14regbit_10"></chekbox>
+        <input type=checkbox id="14regbit_11"></chekbox>
+        <input type=checkbox id="14regbit_12"></chekbox>
+        <input type=checkbox id="14regbit_13"></chekbox>
+        <input type=checkbox id="14regbit_14"></chekbox>
+        <input type=checkbox id="14regbit_15"></chekbox>
+    </section>
+    <section id="alarm15">register15
+        <input type=checkbox id="15regbit_0"></chekbox>
+        <input type=checkbox id="15regbit_1"></chekbox>
+        <input type=checkbox id="15regbit_2"></chekbox>
+        <input type=checkbox id="15regbit_3"></chekbox>
+        <input type=checkbox id="15regbit_4"></chekbox>
+        <input type=checkbox id="15regbit_5"></chekbox>
+        <input type=checkbox id="15regbit_6"></chekbox>
+        <input type=checkbox id="15regbit_7"></chekbox>
+        <input type=checkbox id="15regbit_8"></chekbox>
+        <input type=checkbox id="15regbit_9"></chekbox>
+        <input type=checkbox id="15regbit_10"></chekbox>
+        <input type=checkbox id="15regbit_11"></chekbox>
+        <input type=checkbox id="15regbit_12"></chekbox>
+        <input type=checkbox id="15regbit_13"></chekbox>
+        <input type=checkbox id="15regbit_14"></chekbox>
+        <input type=checkbox id="15regbit_15"></chekbox>
+    </section>
+    <div id="HtmlLogView">
+        <h1 id="idlog">LogView</h1>
+    </div>
 </body>
 
 </html>
