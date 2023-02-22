@@ -1,8 +1,6 @@
 "use strict"
 const warningImage = new Image();
 
-//const beepSound = 'bell-ringing.mp3';
-//const warningSound = new Audio(beepSound);
 const warningSound = document.getElementById('warning-sound');
 warningSound.loop = true;
 warningSound.muted = false;
@@ -557,10 +555,6 @@ class drawDiagram {
 //             alert("");
 //         }
 // )
-let drawdiag = new drawDiagram(9, 100);
-drawdiag.drawSymbol();
-drawdiag.commandDraw();
-drawdiag.warningAlarm(false);
 class modBusDataClass {
     constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) {
         this.wireColor = '#3d8021';
@@ -896,10 +890,17 @@ class modbusDataArrayClass {
         // 새로운 인스턴스를 만들지만 만들어지 cmdBus는 Array에 들어가지 
         // 않을 수 도 있다. 앞의 데이타와 동일하면 추가 되지 않는다.
         this.cmodBus = new modBusDataClass(this.dataView.buffer, this.justOnlyEvent, this.alarmEvent, this.modBusDataArray);
+
+        document.addEventListener('alarmStatusChanged', function (event) {
+            console.log('event.detail ${event.detail}' + event.detail)
+            drawdiag.warningAlarm(event.detail);
+            drawdiag.warningImage(event.detail);
+        });
     };
-    addEventListener(eventname, callback) {
-        document.addEventListener(eventname, callback);
-    }
+    
+    // addEventListener(eventname, callback) {
+    //     document.addEventListener(eventname, callback);
+    // }
     // setAlarmStatus(status) {
     //     //alarmStatus = status;
     //     fireAlarmStatus(status)
@@ -1012,84 +1013,6 @@ class modbusDataArrayClass {
         //document.getElementById('HtmlLogView').style.display= "none";
     }
 }
-
-
-let modData = new modbusDataArrayClass();
-async function testClassCode() {
-    //modData.beep();
-    modData.addEventListener('alarmStatusChanged', function (event) {
-        console.log('event.detail ${event.detail}' + event.detail)
-
-        drawdiag.warningAlarm(event.detail);
-        drawdiag.warningImage(event.detail);
-        // if (event.detail === true) {
-        //     drawdiag.warningAlarm(event.detail);
-        //     drawdiag.warningImage(event.detail);
-        // }
-        //if (event.detail === true) {
-        // If the alarm status is true, play the sound and flash the image
-        //if (alarmStatus == true) {
-        // console.log(`warningSound ${warningSound}`)
-        // warningSound.muted = false;;
-        // warningSound.loop = true;
-        // alarmStatus = true;
-        // if (playPromise != undefined) {
-        //     playPromise.then(_ => {
-        //         warningSound.muted = false;
-        //         //warningSound.play();
-        //     })
-        //         .catch(error => { })
-        // }
-        //document.body.appendChild(warningImage);
-        // if (flashInterval !== null) {
-        //     clearInterval(flashInterval); // Clear the previous interval
-        // }
-        // flashInterval = setInterval(() => {
-        //     const img = document.querySelector('img');
-        //     if (img) {
-        //         img.style.visibility = (img.style.visibility === 'hidden') ? 'visible' : 'hidden';
-        //     }
-        // }, 500);
-        //}
-        //} 
-        // else {
-        //     // If the alarm status is false, stop the sound and remove the image
-        //     if (alarmStatus === true) {
-        //         alarmStatus = false;
-        //         warningSound.loop = false;
-        //         warningSound.muted = false;
-        //         warningSound.currentTime = 0;
-        //         //document.body.removeChild(warningImage);
-        //     }
-        // }
-    });
-    let int16Array = new Uint8Array(124);
-    //modData.addDataArray(int16Array, 0b0000111000000000);
-    //await new Promise(resolve => setTimeout(resolve, 1000));
-    //modData.addDataArray(int16Array, 0b0000111000000100);
-    //await new Promise(resolve => setTimeout(resolve, 1000));
-    //modData.addDataArray(int16Array, 0b0000111000000000);
-    //console.log("First")
-    modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000011, 0b0100000000000000, 0b0000000000000000);//
-    //modData.showWarning()
-    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000000, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000001, 0b0000000000000000, 0b0000000000000000);//
-    modData.printEvent(modData.alarmEvent.reverse(), "Alarm");
-    modData.printEvent(modData.justOnlyEvent.reverse(), "Event");
-    //modData.printAlarm("AlarmLog");
-}
-
-// const showButton = document.querySelector('#showButton');
-// const stopButton = document.querySelector('#stopButton');
-
-//12regbit_0
-addEventArray();
-// addEventArray('13');
-// addEventArray('14');
-// addEventArray('15');
 function addEventArray() {
     let Reg_12 = 0x00; let Reg_13 = 0x00; let Reg_14 = 0x00; let Reg_15 = 0x00;
     for (let i = 0; i < 16; i++) {
@@ -1126,46 +1049,53 @@ function addEventArray() {
     }
 }
 
+
+
+async function testClassCode() {
+    //modData.beep();
+    let int16Array = new Uint8Array(124);
+    //modData.addDataArray(int16Array, 0b0000111000000000);
+    //await new Promise(resolve => setTimeout(resolve, 1000));
+    //modData.addDataArray(int16Array, 0b0000111000000100);
+    //await new Promise(resolve => setTimeout(resolve, 1000));
+    //modData.addDataArray(int16Array, 0b0000111000000000);
+    //console.log("First")
+    modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
+    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000011, 0b0100000000000000, 0b0000000000000000);//
+    //modData.showWarning()
+    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
+    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
+    //modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000000, 0b0000000000000000, 0b0000000000000000);//
+    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000001, 0b0000000000000000, 0b0000000000000000);//
+    modData.printEvent(modData.alarmEvent.reverse(), "Alarm");
+    modData.printEvent(modData.justOnlyEvent.reverse(), "Event");
+    //modData.printAlarm("AlarmLog");
+}
+
+// const showButton = document.querySelector('#showButton');
+// const stopButton = document.querySelector('#stopButton');
+
+//12regbit_0
 document.getElementById('showButton').addEventListener('click', (e) => {
     //    fireAlarmStatus(true);
     drawdiag.warningAlarm(true);
-    drawdiag.warningImage(true);
+    //drawdiag.warningImage(true);
 
 });
 document.getElementById('stopButton').addEventListener('click', (e) => {
     console.log("click")
     drawdiag.warningAlarm(false);
-    drawdiag.warningImage(false);
+    //drawdiag.warningImage(false);
     //    fireAlarmStatus(false);
 });
+
+addEventArray(); //배포본에는 사용되지 않을 펑션이다.
+let drawdiag = new drawDiagram(9, 100);
+drawdiag.drawSymbol();
+drawdiag.commandDraw();
+drawdiag.warningAlarm(false);
+let modData = new modbusDataArrayClass();
 window.onload = function () {
     //console.log("onLoad");
     testClassCode();
 };
-        // let inc_w = 300,
-        //     inc_h = 40;
-        // pathString = 'M' + this.start_x + ' ' + this.start_y;
-        // pathString += ' H' + inc_w;
-        // pathString += ' V' + inc_h;
-        // inc_w += 40;
-        // pathString += ' H' + inc_w;
-        // inc_h += this.powerLineWidth;
-        // pathString += ' V' + inc_h;
-        // inc_w += -25;
-        // pathString += ' H' + inc_w;
-        // inc_h += 180;
-        // pathString += ' V' + inc_h;
-        // inc_w += 80;
-        // pathString += ' H' + inc_w;
-        // inc_h += this.powerLineWidth;
-        // pathString += ' V' + inc_h;
-        // inc_w -= 95;
-        // pathString += ' H' + inc_w;
-        // inc_h -= 135;
-        // pathString += ' V' + inc_h;
-        // inc_w -= 50;
-        // pathString += ' H' + inc_w;
-        // pathString += 'z';
-        // let PL_TEST= this.draw.add(this.draw.path(paths)
-        //     .stroke({width:1,color:'black'}))
-        //     .fill('none')
