@@ -1,18 +1,27 @@
 "use strict"
 const warningImage = new Image();
-warningImage.src = 'alert.svg';
-warningImage.width = 50;
-warningImage.height = 50;
 
 //const beepSound = 'bell-ringing.mp3';
 //const warningSound = new Audio(beepSound);
-//warningSound.loop = true;
-
-
 const warningSound = document.getElementById('warning-sound');
-//const unmuteButton = document.getElementById('unmute-button');
+warningSound.loop = true;
+warningSound.muted = false;
+warningSound.autoplay = true;
 let alarmStatus = false;
-let flashInterval = null; // Declare a variable to store the interval ID
+warningSound.load();
+
+async function loadSound() {
+    //await new Promise(resolve => setTimeout(resolve, 1000));
+    let playPromise = warningSound.play()
+        .then(() => {
+            console.log("sound loaded OK")
+        })
+        .catch((error) => {
+            console.log(`error ${error} `)
+            //loadSound()
+        });
+}
+loadSound();//
 
 let register12 = 0b0000111000000000;
 let register13 = 0b0000000000000011;
@@ -84,8 +93,8 @@ Object.defineProperty(obj, 'register15', {
 
 //Function to set the alarm status and trigger the event listener
 function fireAlarmStatus(status) {
-    //console.log(`fireAlarmStatus(${status})`)
-    //alarmStatus = status;
+    console.log(`fireAlarmStatus(${status})`)
+    alarmStatus = status;
     let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
     document.dispatchEvent(alarmStatusEvent);
 }
@@ -93,6 +102,9 @@ function fireAlarmStatus(status) {
 
 class drawDiagram {
     constructor(x, y) {
+
+        this.interval;
+        this.alarmImage;
         this.wireColor = '#3d8021';
         this.diagram = [];
         this.POWER_LINE_FAIL = 1 < 11;
@@ -401,6 +413,7 @@ class drawDiagram {
         this.diagram.push({ name: pl_cb4_out, color: 'none' });
     }
 
+    //hello(){}
     commandDraw() {     /* 전원이 충전기 이거나 배터리 쪽에서 입력이 되고 있다면  */
         let isPowered = (obj.register15 & 1 << 10 || obj.register12 & 1 << 10);
         let cb1_status = obj.register12 & 1 << 9;
@@ -503,15 +516,40 @@ class drawDiagram {
         else
             this.diagram[13].name
                 .fill('none');
-
-
-        // console.log(this.diagram[1].name.x())
-        // console.log(this.diagram[1].name.y())
-
-        let alarmImage = this.draw
+        this.alarmImage = this.draw
             .image('alert.svg', function (event) { })
             .move(700, 220)
             .size(70, 70)
+            .click(function () {
+            })
+            .hide()
+    }
+
+    warningImage(showImage) {
+        if (showImage && this.interval == null) {
+            this.interval = setInterval(function (alarmImage) {
+                //console.log(`showImage=${showImage}`);
+                if (alarmImage.visible()) {
+                    alarmImage.hide();
+                } else {
+                    alarmImage.show();
+                }
+            }, 1000, this.alarmImage);
+        }
+        else if (!showImage) {
+            this.alarmImage.hide();
+            clearInterval(this.interval);
+            this.interval = null;
+        }
+    }
+    warningAlarm(warning) {
+        if (warning) {
+            warningSound.play()
+                .then((resolve) => {
+                    console.log("sound load ok")
+                })
+        }
+        warningSound.muted = !warning;
     }
 }
 
@@ -522,7 +560,7 @@ class drawDiagram {
 let drawdiag = new drawDiagram(9, 100);
 drawdiag.drawSymbol();
 drawdiag.commandDraw();
-
+drawdiag.warningAlarm(false);
 class modBusDataClass {
     constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) {
         this.wireColor = '#3d8021';
@@ -862,12 +900,12 @@ class modbusDataArrayClass {
     addEventListener(eventname, callback) {
         document.addEventListener(eventname, callback);
     }
-    setAlarmStatus(status) {
-        //alarmStatus = status;
-        fireAlarmStatus(status)
-        //let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
-        //document.dispatchEvent(alarmStatusEvent);
-    };
+    // setAlarmStatus(status) {
+    //     //alarmStatus = status;
+    //     fireAlarmStatus(status)
+    //     //let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
+    //     //document.dispatchEvent(alarmStatusEvent);
+    // };
     addDataArray(dataArrayBuffer,
         event12 = 0b0000111000000000
         , event13 = 0b0000000000000011
@@ -906,14 +944,12 @@ class modbusDataArrayClass {
         // || alarmBitMask_14 & event14_alarm
         event15_alarm = (event15_alarm & (1 << 10)) ? event15_alarm & ~(1 << 10) : event15_alarm | (1 << 10);
         if (alarmBitMask_12 & event12_alarm || alarmBitMask_13 & event13_alarm || alarmBitMask_14 & event14_alarm || alarmBitMask_15 & event15_alarm) {
-            //showWarning();
-            //console.log(`setAlarmStatus(true);14=${alarmBitMask_14}`)
-            this.setAlarmStatus(true); // Turn on the alarm
+            //this.setAlarmStatus(true); // Turn on the alarm
+            fireAlarmStatus(true);
         }
         else {
-            //stopWarning();
-            //console.log('setAlarmStatus(false);')
-            this.setAlarmStatus(false); // Turn on the alarm
+            //this.setAlarmStatus(false); // Turn on the alarm
+            fireAlarmStatus(false);
         }
 
         this.cmodBus.addData(this.dataView.buffer);
@@ -982,40 +1018,50 @@ let modData = new modbusDataArrayClass();
 async function testClassCode() {
     //modData.beep();
     modData.addEventListener('alarmStatusChanged', function (event) {
-        //console.log('event.detail ${event.detail}' + event.detail)
-        if (event.detail === true) {
-            // If the alarm status is true, play the sound and flash the image
-            if (alarmStatus == false) {
-                //console.log(`warningSound ${warningSound}`)
-                try {
+        console.log('event.detail ${event.detail}' + event.detail)
 
-                    warningSound.play();
-                } catch (e) {
-                    console.log(e);
-                }
-                warningSound.loop = true;
-                alarmStatus = true;
-                document.body.appendChild(warningImage);
-                if (flashInterval !== null) {
-                    clearInterval(flashInterval); // Clear the previous interval
-                }
-                flashInterval = setInterval(() => {
-                    const img = document.querySelector('img');
-                    if (img) {
-                        img.style.visibility = (img.style.visibility === 'hidden') ? 'visible' : 'hidden';
-                    }
-                }, 500);
-            }
-        } else {
-            // If the alarm status is false, stop the sound and remove the image
-            if (alarmStatus === true) {
-                alarmStatus = false;
-                warningSound.loop = false;
-                warningSound.muted = false;
-                warningSound.currentTime = 0;
-                document.body.removeChild(warningImage);
-            }
-        }
+        drawdiag.warningAlarm(event.detail);
+        drawdiag.warningImage(event.detail);
+        // if (event.detail === true) {
+        //     drawdiag.warningAlarm(event.detail);
+        //     drawdiag.warningImage(event.detail);
+        // }
+        //if (event.detail === true) {
+        // If the alarm status is true, play the sound and flash the image
+        //if (alarmStatus == true) {
+        // console.log(`warningSound ${warningSound}`)
+        // warningSound.muted = false;;
+        // warningSound.loop = true;
+        // alarmStatus = true;
+        // if (playPromise != undefined) {
+        //     playPromise.then(_ => {
+        //         warningSound.muted = false;
+        //         //warningSound.play();
+        //     })
+        //         .catch(error => { })
+        // }
+        //document.body.appendChild(warningImage);
+        // if (flashInterval !== null) {
+        //     clearInterval(flashInterval); // Clear the previous interval
+        // }
+        // flashInterval = setInterval(() => {
+        //     const img = document.querySelector('img');
+        //     if (img) {
+        //         img.style.visibility = (img.style.visibility === 'hidden') ? 'visible' : 'hidden';
+        //     }
+        // }, 500);
+        //}
+        //} 
+        // else {
+        //     // If the alarm status is false, stop the sound and remove the image
+        //     if (alarmStatus === true) {
+        //         alarmStatus = false;
+        //         warningSound.loop = false;
+        //         warningSound.muted = false;
+        //         warningSound.currentTime = 0;
+        //         //document.body.removeChild(warningImage);
+        //     }
+        // }
     });
     let int16Array = new Uint8Array(124);
     //modData.addDataArray(int16Array, 0b0000111000000000);
@@ -1081,12 +1127,16 @@ function addEventArray() {
 }
 
 document.getElementById('showButton').addEventListener('click', (e) => {
-    fireAlarmStatus(true);
+    //    fireAlarmStatus(true);
+    drawdiag.warningAlarm(true);
+    drawdiag.warningImage(true);
 
 });
 document.getElementById('stopButton').addEventListener('click', (e) => {
-    fireAlarmStatus(false);
-
+    console.log("click")
+    drawdiag.warningAlarm(false);
+    drawdiag.warningImage(false);
+    //    fireAlarmStatus(false);
 });
 window.onload = function () {
     //console.log("onLoad");
