@@ -122,15 +122,43 @@ class drawDiagram {
             this.PL_3_length = 40;
         this.background = this.draw.rect(this.width, this.height).fill('#E3E8E6');
         window.addEventListener('register12Updated', () => {
+            for (let i = 0; i < 16; i++) {
+                let idName12 = `12regbit_${i}`;
+                if (document.getElementById(idName12)){
+                    console.log(`${15-i}checked`)
+                    document.getElementById(idName12).checked = obj.register12 & 1 << 15-i;
+                }
+            }
             drawdiag.commandDraw();
         });
         window.addEventListener('register13Updated', () => {
+            for (let i = 0; i < 16; i++) {
+                let idName13 = `13regbit_${i}`;
+                console.log(`${15-i} checked ${document.getElementById(idName13).checked}`)
+                if (document.getElementById(idName13)){
+                    document.getElementById(idName13).checked = obj.register13 & 1 << 15-i;
+                }
+            }
             drawdiag.commandDraw();
         });
         window.addEventListener('register14Updated', () => {
+            for (let i = 0; i < 16; i++) {
+                let idName14 = `14regbit_${i}`;
+                console.log(`${15-i}checked`)
+                if (document.getElementById(idName14)){
+                    document.getElementById(idName14).checked = obj.register14 & 1 << 15-i;
+                }
+            }
             drawdiag.commandDraw();
         });
         window.addEventListener('register15Updated', () => {
+            for (let i = 0; i < 16; i++) {
+                let idName15 = `15regbit_${i}`;
+                console.log(`${15-i}checked`)
+                if (document.getElementById(idName15)){
+                    document.getElementById(idName15).checked = obj.register15 & 1 << 15-i;
+                }
+            }
             drawdiag.commandDraw();
         });
     }
@@ -1070,7 +1098,7 @@ class winsockClass {
             try {
                 let data = JSON.parse(event.data);
                 if (data.command_type == 'time') { this.showTime(data); }
-                //if (data.command_type == 'modbus') { this.fileHtmlData(data); }
+                if (data.command_type == 'modbus') { this.fileHtmlData(data); }
             }
             catch (error) {
                 console.error(error);
