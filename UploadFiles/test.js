@@ -1,11 +1,11 @@
 "use strict"
-const warningImage = new Image();
+//const warningImage = new Image();
 
 const warningSound = document.getElementById('warning-sound');
 warningSound.loop = true;
 warningSound.muted = false;
 warningSound.autoplay = true;
-let alarmStatus = false;
+var alarmStatus = false;
 warningSound.load();
 
 async function loadSound() {
@@ -87,22 +87,23 @@ Object.defineProperty(obj, 'register15', {
 });
 
 
-
-
 //Function to set the alarm status and trigger the event listener
 function fireAlarmStatus(status) {
+    //drawdiag.warningImage(status);
+    drawdiag.warningAlarm(status);
     console.log(`fireAlarmStatus(${status})`)
-    alarmStatus = status;
-    let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
-    document.dispatchEvent(alarmStatusEvent);
+    //drawdiag.warningImage(event.detail);
+    //alarmStatus = status;
+    // let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
+    // document.dispatchEvent(alarmStatusEvent);
 }
 //const modBusDataArray = [/* log data received from UPS monitoring system */];
 
 class drawDiagram {
     constructor(x, y) {
-
+        this.flashInterval;
+        this.alarmImgStatus = false;
         this.interval;
-        this.alarmImage;
         this.wireColor = '#3d8021';
         this.diagram = [];
         this.POWER_LINE_FAIL = 1 < 11;
@@ -135,7 +136,7 @@ class drawDiagram {
     }
     drawSymbol() {
         ////PL_1
-        this.draw
+        this.drawTime = this.draw
             .text('2023-02-21 19:30:02')
             .move(10, 10)
             .stroke({ width: 1, color: 'blue' })
@@ -514,30 +515,46 @@ class drawDiagram {
         else
             this.diagram[13].name
                 .fill('none');
-        this.alarmImage = this.draw
-            .image('alert.svg', function (event) { })
-            .move(700, 220)
-            .size(70, 70)
-            .click(function () {
-            })
-            .hide()
-    }
+        // this.alarmImage = this.draw
+        //     .image('alert.svg', function (event) { })
+        //     .move(700, 220)
+        //     .size(70, 70)
+        //     .click(function () {
+        //     })
+        //     .hide()
 
+        // let startTime = Date.now();
+        //.animate({ duration: 2000, ease: '<>', delay: 0, repeat: true })
+        //.opacity(1)
+        //.dmove(50, 50)
+        // alarmImage = this.draw
+        //     .image('alert.svg', function (event) { })
+        //     .move(700, 220)
+        //     .size(70, 70)
+        //     .hide()
+    }
     warningImage(showImage) {
-        if (showImage && this.interval == null) {
-            this.interval = setInterval(function (alarmImage) {
-                //console.log(`showImage=${showImage}`);
-                if (alarmImage.visible()) {
-                    alarmImage.hide();
-                } else {
+        console.log(`this.alarmImage.show()`)
+        if (showImage) {
+            //alarmImage.show();
+            if (!alarmStatus) {
+                alarmStatus = true;
+                alarmImage.show();
+                this.flashInterval = setInterval(() => {
                     alarmImage.show();
-                }
-            }, 1000, this.alarmImage);
+                    //console.log(`this.alarmImage.show()`)
+                    setTimeout(() => {
+                        alarmImage.hide();
+                        //console.log(`this.alarmImage.hide()`)
+                    }, 500)
+                }, 1000)
+
+            }
         }
         else if (!showImage) {
-            this.alarmImage.hide();
-            clearInterval(this.interval);
-            this.interval = null;
+            alarmStatus = false;
+            clearInterval(this.flashInterval)
+            alarmImage.hide()
         }
     }
     warningAlarm(warning) {
@@ -607,10 +624,11 @@ class modBusDataClass {
         }
     }
     addData(dataArrayBuffer) {
-        const int16Array = new Uint8Array(dataArrayBuffer);
-        const arrayBuffer = int16Array.buffer;
+        const int8Array = new Uint8Array(dataArrayBuffer);
+        const arrayBuffer = int8Array.buffer;
         const dataView = new DataView(arrayBuffer);
         this.logTime = dataView.getUint32(0, 1);
+
         for (let i = 0; i < 60; i++) {
             this.modBus60[i] = dataView.getInt16(4 + (2 * i), 1);
         }
@@ -634,11 +652,11 @@ class modBusDataClass {
                 this.prevRegister_15 ^ this.Register_15
             ) {
                 //console.log("log changed " + this.prevRegister_12);
-                console.log(`this.alarmEvent.length ${this.alarmEvent.length}`)
+                //console.log(`this.alarmEvent.length ${this.alarmEvent.length}`)
                 let prevAlarmCount = this.alarmEvent.length;
                 this.processModBus60();
                 let nowAlarmCount = this.alarmEvent.length;
-                console.log(`this.alarmEvent.length ${this.alarmEvent.length}`)
+                //console.log(`this.alarmEvent.length ${this.alarmEvent.length}`)
                 //html 로그테이블이 존재 하면 데이타를 추가한다. 
                 let table = document.getElementById("AlarmTable");
                 if (nowAlarmCount > prevAlarmCount) {
@@ -649,8 +667,9 @@ class modBusDataClass {
                         cell1.innerHTML = `${(new Date(this.logTime * 1000)).getFullYear()}/${(new Date(this.logTime * 1000)).getMonth() + 1}/${(new Date(this.logTime * 1000)).getDay()} ${(new Date(this.logTime * 1000)).getHours()}:${(new Date(this.logTime * 1000)).getMinutes()}:${(new Date(this.logTime * 1000)).getSeconds()} `;
                         if (this.alarmEvent[this.alarmEvent.length - 1].events) {
                             this.alarmEvent[this.alarmEvent.length - 1].events.forEach(etdata => {
-                                console.log(etdata);
+                                //console.log(etdata);
                                 cell2.innerHTML += etdata;//this.justOnlyEvent.length; // Set the content of the second cell
+                                cell2.innerHTML += '<br>'
                             })
                         }
                     }
@@ -671,10 +690,10 @@ class modBusDataClass {
                     //cell1.appendChild(document.createTextNode("new data1"));
                     //cell2.appendChild(document.createTextNode("new data2"));
                     cell1.innerHTML = `${(new Date(this.logTime * 1000)).getFullYear()}/${(new Date(this.logTime * 1000)).getMonth() + 1}/${(new Date(this.logTime * 1000)).getDay()} ${(new Date(this.logTime * 1000)).getHours()}:${(new Date(this.logTime * 1000)).getMinutes()}:${(new Date(this.logTime * 1000)).getSeconds()} `;
-                    console.log(this.justOnlyEvent.length)
-                    console.log(this.justOnlyEvent[this.justOnlyEvent.length - 1].events);
+                    // console.log(this.justOnlyEvent.length)
+                    // console.log(this.justOnlyEvent[this.justOnlyEvent.length - 1].events);
                     this.justOnlyEvent[this.justOnlyEvent.length - 1].events.forEach(etdata => {
-                        console.log(etdata);
+                        //console.log(etdata);
                         cell2.innerHTML += etdata;//this.justOnlyEvent.length; // Set the content of the second cell
                     })
                     //console.log(this)
@@ -750,7 +769,7 @@ class modBusDataClass {
                     }
                 }
                 if (message_15) {
-                    console.log(`message_15.message ${message_15.type} ${message_15.message}`)
+                    //console.log(`message_15.message ${message_15.type} ${message_15.message}`)
                     eventList.push(message_15.message); // if exgist, all event must recored.
                     if (message_15.type === 'alarm') {  //alarm으로 기록된 것만 여기에 기록한다.
                         alarmList.push(message_15.message);
@@ -859,7 +878,7 @@ class modBusDataClass {
                     //console.log(`bitIndex:${bitIndex} bitValue ${bitValue} nowBitValue ${nowBitValue}`)
                     message.type = nowBitValue ? 'event' : message.type
                     message.message = nowBitValue ? message.message + message.ON : message.message + message.OFF
-                    console.log(`message.type=${message.type},message.message= ${message.message}`)
+                    //console.log(`message.type=${message.type},message.message= ${message.message}`)
                     return { type: message.type, message: message.message };
                 }
             }
@@ -868,15 +887,14 @@ class modBusDataClass {
     }
 }
 
-
 class modbusDataArrayClass {
     constructor() {
 
         this.modBusDataArray = [];// log data received from UPS monitoring system 
         this.justOnlyEvent = []; // array to store event data
         this.alarmEvent = []; // array to store alarm data
-        this.int16Array = new Uint8Array(124);
-        this.arrayBuffer = this.int16Array.buffer;
+        this.int8Array = new Uint8Array(124);
+        this.arrayBuffer = this.int8Array.buffer;
         this.dataView = new DataView(this.arrayBuffer);
 
         this.dataView.setUint32(0, (new Date()).getTime() / 1000, 1);
@@ -885,25 +903,24 @@ class modbusDataArrayClass {
         this.dataView.setInt16(4 + 24, 0b0000111000000000, 1);
         this.dataView.setInt16(4 + 26, 0b0000000000000011, 1);
         this.dataView.setInt16(4 + 28, 0b0000000000000000, 1);
-        this.dataView.setInt16(4 + 30, 0b0000000000000000, 1);
+        this.dataView.setInt16(4 + 30, 0b0000010000000000, 1);
         this.logTime = this.dataView.getUint32(0, 1);
         // 새로운 인스턴스를 만들지만 만들어지 cmdBus는 Array에 들어가지 
         // 않을 수 도 있다. 앞의 데이타와 동일하면 추가 되지 않는다.
         this.cmodBus = new modBusDataClass(this.dataView.buffer, this.justOnlyEvent, this.alarmEvent, this.modBusDataArray);
 
         document.addEventListener('alarmStatusChanged', function (event) {
-            console.log('event.detail ${event.detail}' + event.detail)
-            drawdiag.warningAlarm(event.detail);
-            drawdiag.warningImage(event.detail);
+            //console.log('event.detail ${event.detail}' + event.detail)
+            // drawdiag.warningAlarm(event.detail);
+            // drawdiag.warningImage(event.detail);
         });
     };
-    
+
     // addEventListener(eventname, callback) {
     //     document.addEventListener(eventname, callback);
     // }
     // setAlarmStatus(status) {
     //     //alarmStatus = status;
-    //     fireAlarmStatus(status)
     //     //let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
     //     //document.dispatchEvent(alarmStatusEvent);
     // };
@@ -911,11 +928,14 @@ class modbusDataArrayClass {
         event12 = 0b0000111000000000
         , event13 = 0b0000000000000011
         , event14 = 0b0000000000000000
-        , event15 = 0b0000000000000000
+        , event15 = 0b0000010000000000
     ) {
-        this.int16Array = new Uint8Array(dataArrayBuffer);
-        this.arrayBuffer = this.int16Array.buffer;
+        this.int8Array = new Uint8Array(dataArrayBuffer);
+        this.arrayBuffer = this.int8Array.buffer;
+
         this.dataView = new DataView(this.arrayBuffer);
+
+
         this.dataView.setUint32(0, (new Date()).getTime() / 1000, 1);
         this.dataView.setInt16(4 + 24, event12, 1);
         this.dataView.setInt16(4 + 24 + 2, event13, 1);
@@ -946,11 +966,17 @@ class modbusDataArrayClass {
         event15_alarm = (event15_alarm & (1 << 10)) ? event15_alarm & ~(1 << 10) : event15_alarm | (1 << 10);
         if (alarmBitMask_12 & event12_alarm || alarmBitMask_13 & event13_alarm || alarmBitMask_14 & event14_alarm || alarmBitMask_15 & event15_alarm) {
             //this.setAlarmStatus(true); // Turn on the alarm
+            console.log(`fireAlarmStatus occured`)
+            // let stopButton = document.getElementById('showButton');
+            // stopButton.dispatchEvent(new Event('click'));
             fireAlarmStatus(true);
         }
         else {
             //this.setAlarmStatus(false); // Turn on the alarm
+            console.log(`fireAlarmStatus released`)
             fireAlarmStatus(false);
+            // let stopButton = document.getElementById('stopButton');
+            // stopButton.dispatchEvent(new Event('click'));
         }
 
         this.cmodBus.addData(this.dataView.buffer);
@@ -1013,6 +1039,94 @@ class modbusDataArrayClass {
         //document.getElementById('HtmlLogView').style.display= "none";
     }
 }
+
+class winsockClass {
+    constructor(connectUrl) {
+        this.modbus_registor = {
+            "time": 0,
+            "value": [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ],
+        };
+        this.webSocket = new WebSocket('ws://' + connectUrl + ':81/');
+        this.webSocket.onclose = (event) => {
+            new Promise((resolve) => {
+                setTimeout(resolve, 1000);
+            }).then(() => {
+                console.log(`socket Close from ${connectUrl}`)
+                console.log('Socket retry connect....');
+                this.webSocket = new WebSocket('ws://' + connectUrl + ':81/');
+            })
+        }
+        this.webSocket.addEventListener('open', (event) => {
+            console.log(`socket opend to ${connectUrl}`)
+        })
+        this.webSocket.addEventListener('message', (event) => {
+            try {
+                let data = JSON.parse(event.data);
+                if (data.command_type == 'time') { this.showTime(data); }
+                //if (data.command_type == 'modbus') { this.fileHtmlData(data); }
+            }
+            catch (error) {
+                console.error(error);
+            }
+            //console.log(`data received ${data.command_type}`)
+        })
+    }
+    fileHtmlData(data) {
+        /*
+        let int8Array = new Uint8Array(124);
+        obj.register12 = Reg_12; obj.register13 = Reg_13; obj.register14 = Reg_14; obj.register15 = Reg_15;
+        modData.addDataArray(int8Array, Reg_12, Reg_13, Reg_14, Reg_15);//
+        */
+        // for (let i = 0; i < 30; i++) {
+        //     console.log(`data.value[${i}]=${data.value[i]} `)
+        // }
+        let int16Array = new Uint16Array(data.value);
+        let int8Array = new Uint8Array(int16Array.length * 2 + 4);
+        for (let i = 0; i < int16Array.length; i++) {
+            int8Array[4 + i * 2] = int16Array[i] & 0xFF; // lower byte
+            int8Array[4 + i * 2 + 1] = (int16Array[i] >> 8) & 0xFF; // upper byte
+        }
+        // for (let i = 0; i < int8Array.length; i++) {
+        //     console.log(`data.value[${i}]=${int8Array[i]} `)
+        // }
+        // let newData = new Uint8Array(int8Array.length + 4);
+        // newData.set(int8Array, 4)
+        //let int16Array = new Uint16Array(data.value);
+        //console.log(`int16Array length ${typeof (int8Array).length}${int8Array.length}`)
+        obj.register12 = data.value[12];
+        obj.register13 = data.value[13];
+        obj.register14 = data.value[14];
+        obj.register15 = data.value[15];
+        modData.addDataArray(int8Array, data.value[12], data.value[13], data.value[14], data.value[15]);//
+        this.modbus_registor.value = data.value;
+        let el = document.getElementById('modbusData');
+        el.innerHTML = 'Received Data: ';
+        el.innerHTML = data.value;
+        inputVol_R.innerHTML = data.value[20];
+        inputVol_S.innerHTML = data.value[21];
+        inputVol_T.innerHTML = data.value[22];
+        inputAmp_R.innerHTML = data.value[23];
+        inputAmp_S.innerHTML = data.value[24];
+        inputAmp_T.innerHTML = data.value[25];
+        batVoltage.innerHTML = data.value[29];
+        batAmpere.innerHTML = data.value[30];
+        loadRate.innerHTML = data.value[32] + "(%)";
+    }
+    showTime(data) {
+        //console.log(`data.time ${data.time}`)
+        let nowTime = new Date(data.time * 1000);
+        drawdiag.drawTime.text(nowTime.toLocaleString());
+    }
+}
+let winsockCharger = new winsockClass("192.168.0.57")
+
 function addEventArray() {
     let Reg_12 = 0x00; let Reg_13 = 0x00; let Reg_14 = 0x00; let Reg_15 = 0x00;
     for (let i = 0; i < 16; i++) {
@@ -1035,15 +1149,13 @@ function addEventArray() {
                     if (document.getElementById(iddName14).checked) Reg_14 |= 1 << 15 - j;
                     if (document.getElementById(iddName15).checked) Reg_15 |= 1 << 15 - j;
                 }
-                // console.log(`reg_12 ${iddname12}= ${reg_12}`);
-                // console.log(`reg_13 ${iddname13}= ${reg_13}`);
-                // console.log(`reg_14 ${iddname14}= ${reg_14}`);
-                // console.log(`reg_15 ${iddname15}= ${reg_15}`);
-                let int16Array = new Uint8Array(124);
+                // console.log(`reg_12 = ${Reg_12}`);
+                // console.log(`reg_13 = ${Reg_13}`);
+                // console.log(`reg_14 = ${Reg_14}`);
+                // console.log(`reg_15 = ${Reg_15}`);
+                let int8Array = new Uint8Array(124);
                 obj.register12 = Reg_12; obj.register13 = Reg_13; obj.register14 = Reg_14; obj.register15 = Reg_15;
-                modData.addDataArray(int16Array, Reg_12, Reg_13, Reg_14, Reg_15);//
-                //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000011, 0b0100000000000000, 0b0000000000000000);//
-                //fireAlarmStatus(true);
+                modData.addDataArray(int8Array, Reg_12, Reg_13, Reg_14, Reg_15);//
             });
         });
     }
@@ -1053,20 +1165,16 @@ function addEventArray() {
 
 async function testClassCode() {
     //modData.beep();
-    let int16Array = new Uint8Array(124);
-    //modData.addDataArray(int16Array, 0b0000111000000000);
+    let int8Array = new Uint8Array(124);
+    //modData.addDataArray(int8Array, 0b0000111000000000);
     //await new Promise(resolve => setTimeout(resolve, 1000));
-    //modData.addDataArray(int16Array, 0b0000111000000100);
-    //await new Promise(resolve => setTimeout(resolve, 1000));
-    //modData.addDataArray(int16Array, 0b0000111000000000);
-    //console.log("First")
-    modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000011, 0b0100000000000000, 0b0000000000000000);//
-    //modData.showWarning()
-    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000110000000000, 0b0000000000000011, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000000, 0b0000000000000000, 0b0000000000000000, 0b0000000000000000);//
-    //modData.addDataArray(int16Array, 0b0000111000000001, 0b0000000000000001, 0b0000000000000000, 0b0000000000000000);//
+    obj.register12 = 0b0000111000000000;
+    obj.register13 = 0b0000000000000011;
+    obj.register14 = 0b0000000000000000;
+    obj.register15 = 0b0000010000000000;
+    //modData.addDataArray(int8Array, obj.register12, obj.register13, obj.register14, obj.register15);//
+    //아래의 프린트는 틀만 프린트 하고 
+    // 실제 데이타는 이벤트 데이타 처리 루틴에서 이루어 진다
     modData.printEvent(modData.alarmEvent.reverse(), "Alarm");
     modData.printEvent(modData.justOnlyEvent.reverse(), "Event");
     //modData.printAlarm("AlarmLog");
@@ -1077,24 +1185,31 @@ async function testClassCode() {
 
 //12regbit_0
 document.getElementById('showButton').addEventListener('click', (e) => {
-    //    fireAlarmStatus(true);
-    drawdiag.warningAlarm(true);
-    //drawdiag.warningImage(true);
-
+    fireAlarmStatus(true);
 });
 document.getElementById('stopButton').addEventListener('click', (e) => {
     console.log("click")
-    drawdiag.warningAlarm(false);
-    //drawdiag.warningImage(false);
-    //    fireAlarmStatus(false);
+    fireAlarmStatus(false);
 });
+//event = new CustomEvent('click');
+//window.dispatchEvent(event);
 
 addEventArray(); //배포본에는 사용되지 않을 펑션이다.
-let drawdiag = new drawDiagram(9, 100);
+const drawdiag = new drawDiagram(9, 100);
+
+//drawdiag  클래스가 생성된후 사용해야 한다
+var draw = drawdiag.draw;
+var alarmImage = draw
+    .image('alert.svg', function (event) { })
+    .move(700, 220)
+    .size(70, 70)
+    .click(function () { })
+    .hide()
+//drawdiag.animate(true)
 drawdiag.drawSymbol();
 drawdiag.commandDraw();
 drawdiag.warningAlarm(false);
-let modData = new modbusDataArrayClass();
+const modData = new modbusDataArrayClass();
 window.onload = function () {
     //console.log("onLoad");
     testClassCode();
