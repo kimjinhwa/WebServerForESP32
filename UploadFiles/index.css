@@ -23,14 +23,17 @@ a {
     color: white;
 }
 
-.HtmlMainView {
-    display: flex;
+#HtmlMainView {
+    display: grid;
+    grid-template-columns:900px;
     justify-content: center;
     align-items: center;
 }
 .chargeInfo {
     display: flex;
     margin-top: 10px;
+    max-width: 900px;
+    
     /* justify-content: center;
     align-items: center;
     width: 100%;
@@ -40,6 +43,34 @@ a {
     max-width: 1000px; */
     /* margin-right: 10px; */
     /* align-items */
+}
+#HtmlLogView{
+    display: grid;
+    grid-template-columns:450px 450px;
+    column-gap: 30px; 
+    justify-content: center;
+    align-items: center;
+}
+#HtmlLogView #secSaveAlarmBtn,#secSaveEventBtn {
+    display: grid;
+    justify-content:end
+}
+.gridHeadng{
+    grid-column: 1/span 2;
+    background-color: #f0fbf7;
+    text-align: center; 
+}
+#eventDiv,#alarmDiv{
+    overflow: auto;
+    height: 500px;
+    font-size: medium;
+    font-weight: 100;
+    align-items: center;
+    justify-content: center;
+}
+#heading{
+   border:#4404aa;
+   font-size: small;
 }
 .inputStatus {
     padding-right: 30px;
@@ -200,4 +231,25 @@ th {
 #statusBar{
     font-size:xx-small; 
     color: rgb(15, 19, 19);
+}
+
+/* */
+#testRoutinea{
+    display: block;
+    grid-template-columns:250px 200px ; 
+    justify-content: center;
+    justify-items: center;
+    align-items: center;
+}
+/* 네트웍 설정 부분*/
+.viewSetNetwork{
+    display: grid;
+    grid-template-columns:250px 200px auto; 
+    justify-content: center;
+    row-gap: 15px;
+}
+.cssLblNetwork{
+    font-size:medium;
+    font-weight: 700;
+    color: rgb(9, 11, 83);
 }

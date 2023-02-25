@@ -6,8 +6,45 @@ warningSound.loop = true;
 warningSound.muted = false;
 warningSound.autoplay = true;
 var alarmStatus = false;
+var connectUrl = "192.168.0.57"
+var webSocket = new WebSocket('ws://' + connectUrl + ':81/');
 warningSound.load();
+function ValidateIPaddress(inputText) {
+    let ipformat = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (inputText.match(ipformat)) {
+        return true;
+    }
+    else {
+        alert("입력값의 형식이 잘못 되었습니다.!");
+        document.form1.text1.focus(); return false;
+    }
+}
 
+
+function getCookie(name) {
+    var nameEQ = name + '=';
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i];
+        while (cookie.charAt(0) == ' ') {
+            cookie = cookie.substring(1, cookie.length);
+        }
+        if (cookie.indexOf(nameEQ) == 0) {
+            return cookie.substring(nameEQ.length, cookie.length);
+        }
+    }
+    return null;
+}
+function setCookie(name, value, expires) {
+    var cookie =
+        name +
+        '=' +
+        value +
+        '; expires=' +
+        expires.toUTCString() +
+        '; path=/';
+    document.cookie = cookie;
+}
 async function loadSound() {
     //await new Promise(resolve => setTimeout(resolve, 1000));
     let playPromise = warningSound.play()
@@ -38,7 +75,7 @@ Object.defineProperty(obj, 'register12', {
             register12 = value;
             const event = new CustomEvent('register12Updated');
             window.dispatchEvent(event);
-            console.log("이벤트발생")
+            //console.log("이벤트발생")
         }
         //inputVoltage.innerHTML = value;
     }
@@ -90,8 +127,12 @@ Object.defineProperty(obj, 'register15', {
 //Function to set the alarm status and trigger the event listener
 function fireAlarmStatus(status) {
     //drawdiag.warningImage(status);
-    drawdiag.warningAlarm(status);
-    console.log(`fireAlarmStatus(${status})`)
+    try {
+        drawdiag.warningAlarm(status);
+        //console.log(`fireAlarmStatus(${status})`)
+    } catch (e) {
+
+    }
     //drawdiag.warningImage(event.detail);
     //alarmStatus = status;
     // let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
@@ -124,9 +165,9 @@ class drawDiagram {
         window.addEventListener('register12Updated', () => {
             for (let i = 0; i < 16; i++) {
                 let idName12 = `12regbit_${i}`;
-                if (document.getElementById(idName12)){
-                    console.log(`${15-i}checked`)
-                    document.getElementById(idName12).checked = obj.register12 & 1 << 15-i;
+                if (document.getElementById(idName12)) {
+                    //console.log(`${15 - i}checked = ${document.getElementById(idName12).checked }`)
+                    document.getElementById(idName12).checked = obj.register12 & 1 << 15 - i;
                 }
             }
             drawdiag.commandDraw();
@@ -134,9 +175,11 @@ class drawDiagram {
         window.addEventListener('register13Updated', () => {
             for (let i = 0; i < 16; i++) {
                 let idName13 = `13regbit_${i}`;
-                console.log(`${15-i} checked ${document.getElementById(idName13).checked}`)
-                if (document.getElementById(idName13)){
-                    document.getElementById(idName13).checked = obj.register13 & 1 << 15-i;
+
+                //console.log(`${15 - i} checked ${document.getElementById(idName13).checked}`)
+
+                if (document.getElementById(idName13)) {
+                    document.getElementById(idName13).checked = obj.register13 & 1 << 15 - i;
                 }
             }
             drawdiag.commandDraw();
@@ -144,9 +187,11 @@ class drawDiagram {
         window.addEventListener('register14Updated', () => {
             for (let i = 0; i < 16; i++) {
                 let idName14 = `14regbit_${i}`;
-                console.log(`${15-i}checked`)
-                if (document.getElementById(idName14)){
-                    document.getElementById(idName14).checked = obj.register14 & 1 << 15-i;
+
+                //console.log(`${15 - i}checked`)
+
+                if (document.getElementById(idName14)) {
+                    document.getElementById(idName14).checked = obj.register14 & 1 << 15 - i;
                 }
             }
             drawdiag.commandDraw();
@@ -154,9 +199,11 @@ class drawDiagram {
         window.addEventListener('register15Updated', () => {
             for (let i = 0; i < 16; i++) {
                 let idName15 = `15regbit_${i}`;
-                console.log(`${15-i}checked`)
-                if (document.getElementById(idName15)){
-                    document.getElementById(idName15).checked = obj.register15 & 1 << 15-i;
+
+                //console.log(`${15 - i}checked`)
+
+                if (document.getElementById(idName15)) {
+                    document.getElementById(idName15).checked = obj.register15 & 1 << 15 - i;
                 }
             }
             drawdiag.commandDraw();
@@ -587,10 +634,15 @@ class drawDiagram {
     }
     warningAlarm(warning) {
         if (warning) {
-            warningSound.play()
-                .then((resolve) => {
-                    console.log("sound load ok")
-                })
+            try {
+                warningSound.play()
+                    .then((resolve) => {
+                        console.log("sound load ok")
+                    })
+            }
+            catch (e) {
+                console.log(e);
+            }
         }
         warningSound.muted = !warning;
     }
@@ -655,7 +707,8 @@ class modBusDataClass {
         const int8Array = new Uint8Array(dataArrayBuffer);
         const arrayBuffer = int8Array.buffer;
         const dataView = new DataView(arrayBuffer);
-        this.logTime = dataView.getUint32(0, 1);
+        this.logTime = dataView.getUint32(0, 1) * 1000;
+        console.log(`logTime(${this.logTime}) =  ${new Date((this.logTime))}`)
 
         for (let i = 0; i < 60; i++) {
             this.modBus60[i] = dataView.getInt16(4 + (2 * i), 1);
@@ -692,7 +745,8 @@ class modBusDataClass {
                         let newRow = table.insertRow(1); // Insert a new row at index 0
                         let cell1 = newRow.insertCell(0); // Insert a new cell in the new row
                         let cell2 = newRow.insertCell(1); // Insert another new cell in the new row
-                        cell1.innerHTML = `${(new Date(this.logTime * 1000)).getFullYear()}/${(new Date(this.logTime * 1000)).getMonth() + 1}/${(new Date(this.logTime * 1000)).getDay()} ${(new Date(this.logTime * 1000)).getHours()}:${(new Date(this.logTime * 1000)).getMinutes()}:${(new Date(this.logTime * 1000)).getSeconds()} `;
+                        let logDate = new Date(this.logTime);
+                        cell1.innerHTML = `${logDate.getFullYear()}/${logDate.getMonth() + 1}/${logDate.getDate()} ${logDate.getHours()}:${logDate.getMinutes()}:${logDate.getSeconds()} `;
                         if (this.alarmEvent[this.alarmEvent.length - 1].events) {
                             this.alarmEvent[this.alarmEvent.length - 1].events.forEach(etdata => {
                                 //console.log(etdata);
@@ -717,7 +771,8 @@ class modBusDataClass {
                     let cell2 = newRow.insertCell(1); // Insert another new cell in the new row
                     //cell1.appendChild(document.createTextNode("new data1"));
                     //cell2.appendChild(document.createTextNode("new data2"));
-                    cell1.innerHTML = `${(new Date(this.logTime * 1000)).getFullYear()}/${(new Date(this.logTime * 1000)).getMonth() + 1}/${(new Date(this.logTime * 1000)).getDay()} ${(new Date(this.logTime * 1000)).getHours()}:${(new Date(this.logTime * 1000)).getMinutes()}:${(new Date(this.logTime * 1000)).getSeconds()} `;
+                    let logDate = new Date(this.logTime);
+                    cell1.innerHTML = `${logDate.getFullYear()}/${logDate.getMonth() + 1}/${logDate.getDate()} ${logDate.getHours()}:${logDate.getMinutes()}:${logDate.getSeconds()} `;
                     // console.log(this.justOnlyEvent.length)
                     // console.log(this.justOnlyEvent[this.justOnlyEvent.length - 1].events);
                     this.justOnlyEvent[this.justOnlyEvent.length - 1].events.forEach(etdata => {
@@ -964,7 +1019,8 @@ class modbusDataArrayClass {
         this.dataView = new DataView(this.arrayBuffer);
 
 
-        this.dataView.setUint32(0, (new Date()).getTime() / 1000, 1);
+        this.dataView.setUint32(0, (this.dataView.getUint32(0, 1) - 9 * 3600), 1);
+        //console.log(`logTime(${this.dataView.getUint32(0, 1)}) =  ${new Date((this.dataView.getUint32(0, 1))*1000)}`)
         this.dataView.setInt16(4 + 24, event12, 1);
         this.dataView.setInt16(4 + 24 + 2, event13, 1);
         this.dataView.setInt16(4 + 24 + 2 + 2, event14, 1);
@@ -994,14 +1050,14 @@ class modbusDataArrayClass {
         event15_alarm = (event15_alarm & (1 << 10)) ? event15_alarm & ~(1 << 10) : event15_alarm | (1 << 10);
         if (alarmBitMask_12 & event12_alarm || alarmBitMask_13 & event13_alarm || alarmBitMask_14 & event14_alarm || alarmBitMask_15 & event15_alarm) {
             //this.setAlarmStatus(true); // Turn on the alarm
-            console.log(`fireAlarmStatus occured`)
+            //console.log(`fireAlarmStatus occured`)
             // let stopButton = document.getElementById('showButton');
             // stopButton.dispatchEvent(new Event('click'));
             fireAlarmStatus(true);
         }
         else {
             //this.setAlarmStatus(false); // Turn on the alarm
-            console.log(`fireAlarmStatus released`)
+            //console.log(`fireAlarmStatus released`)
             fireAlarmStatus(false);
             // let stopButton = document.getElementById('stopButton');
             // stopButton.dispatchEvent(new Event('click'));
@@ -1032,9 +1088,21 @@ class modbusDataArrayClass {
 
     };
     printEvent(eventAlarmData, heading) {
-        let logHeading = document.createElement("h1");
-        logHeading.innerHTML = heading;
-        document.getElementById('HtmlLogView').appendChild(logHeading);
+        // let logHeading = document.createElement("h1");
+        // logHeading.innerHTML = heading;
+
+
+        // modData.printEvent(modData.alarmEvent.reverse(), "Alarm");
+        // modData.printEvent(modData.justOnlyEvent.reverse(), "Event");
+        let logDiv;
+        if (heading === "Alarm")
+            logDiv = document.getElementById('alarmDiv')
+        //.appendChild(logHeading);
+        else
+            logDiv = document.getElementById('eventDiv')
+        //.appendChild(logHeading);
+
+        //document.getElementById('HtmlLogView').appendChild(logHeading);
         let table = document.createElement("table");
         //AlarmTable EventTable
         table.setAttribute("id", heading + "Table");
@@ -1063,13 +1131,92 @@ class modbusDataArrayClass {
 
         table.appendChild(tbody);
         //document.body.appendChild(table);
-        document.getElementById('HtmlLogView').appendChild(table);
+        //document.getElementById('HtmlLogView').appendChild(table);
+        logDiv.appendChild(table);
         //document.getElementById('HtmlLogView').style.display= "none";
     }
 }
 
+setInterval(() => {
+    if (webSocket.readyState !== webSocket.OPEN) {
+        let newWebSocket = new WebSocket('ws://' + connectUrl + ':81/');
+        webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
+    }
+}, 5000);
+var isDownloadComplete = false;
+var socketCommand = "";
+async function isLogFunction(event) {
+    let receiveData = ""
+    if (event.data === "log_download") {
+        //로그파일을 전송하라고 명령을 준다
+        socketCommand = "log_download_start";
+        receiveData = "";
+
+        let table = document.getElementById("AlarmTable");
+        const numRows = table.rows.length;
+        for (let i = numRows - 1; i >= 1; i--) {
+            // Check if the row index is greater than or equal to the insertion index (1 in this example)
+            if (i >= 1) {
+                // Delete the row
+                table.deleteRow(i);
+            }
+        }
+        let table1 = document.getElementById("EventTable");
+        let numRows1 = table1.rows.length;
+        for (let i = numRows1 - 1; i >= 1; i--) {
+            // Check if the row index is greater than or equal to the insertion index (1 in this example)
+            if (i >= 1) {
+                // Delete the row
+                table1.deleteRow(i);
+            }
+        }
+        //console.log("LogFile request start...");
+        return;
+    }
+    if (event.data === "download_complete") {
+        console.log("LogFile download complete..." + typeof (event.data));
+
+        isDownloadComplete = true;
+        socketCommand = "";
+        new Promise((resolve) => {
+            setTimeout(resolve, 500);
+        }).then(() => {
+
+            //printLogToHtml();
+            // for (let i = 0; i < modBusDataArray.length; i++) {
+            //     console.log("modBusDataArray.length is " + modBusDataArray.length);
+            //     console.log(modBusDataArray[i].logTime);
+            //     console.log(modBusDataArray[i].modBus60);
+            // }
+
+        });
+        //processReceivedData(receiveData );
+        return;
+    }
+
+    if (socketCommand === "log_download_start" || typeof (event.data) == Object) {
+        //파일데이타가 도착했다.
+        //console.log("LogFile downloading..." + typeof (event.data));
+        let reader = new FileReader();
+        reader.readAsArrayBuffer(event.data);
+        await new Promise(resolve => {
+            reader.onload = (evt) => {
+                let int8Array = new Uint8Array(evt.target.result);
+                let int16Array = new Uint16Array(evt.target.result);
+                //obj.register12 = Reg_12; obj.register13 = Reg_13; obj.register14 = Reg_14; obj.register15 = Reg_15;
+                modData.addDataArray(int8Array, int16Array[12 + 2], int16Array[13 + 2], int16Array[14 + 2], int16Array[15 + 2]);//
+                //console.log(`12=${int16Array[12+2]}  13=${int16Array[13+2]} 14=${int16Array[14+2]} 15=${int16Array[15+2]}    `)
+                //modBusDataArray.push(new modBusDataClass(evt.target.result));
+                //console.log("modBusDataArray.length is " + modBusDataArray.length);
+                resolve();
+            }
+        });
+        receiveData += event.data;
+        return;
+    }
+}
 class winsockClass {
-    constructor(connectUrl) {
+    constructor() {
         this.modbus_registor = {
             "time": 0,
             "value": [
@@ -1081,31 +1228,35 @@ class winsockClass {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ],
         };
-        this.webSocket = new WebSocket('ws://' + connectUrl + ':81/');
-        this.webSocket.onclose = (event) => {
-            new Promise((resolve) => {
-                setTimeout(resolve, 1000);
-            }).then(() => {
-                console.log(`socket Close from ${connectUrl}`)
-                console.log('Socket retry connect....');
-                this.webSocket = new WebSocket('ws://' + connectUrl + ':81/');
-            })
+        webSocket.onclose = (event) => {
+            console.log(`socket Close from ${connectUrl}`);
+            console.log('Socket retry connect....');
+            setTimeout(() => {
+                const newWebSocket = new WebSocket('ws://' + connectUrl + ':81/');
+                webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
+            }, 1000);
         }
-        this.webSocket.addEventListener('open', (event) => {
+        webSocket.addEventListener('open', (event) => {
             console.log(`socket opend to ${connectUrl}`)
         })
-        this.webSocket.addEventListener('message', (event) => {
-            try {
-                let data = JSON.parse(event.data);
-                if (data.command_type == 'time') { this.showTime(data); }
-                if (data.command_type == 'modbus') { this.fileHtmlData(data); }
-            }
-            catch (error) {
-                console.error(error);
-            }
+        webSocket.onmessage = async (event) => {
+            await isLogFunction(event)
+            //console.log(event.data)
+            // try {
+            //     let data = JSON.parse(event.data);
+            //     //console.log(`data.command_type ${typeof (data)} == ${data.command_type}`)
+            //     if (data.command_type == 'time') { this.showTime(data); }
+            //     if (data.command_type == 'modbus') { this.fileHtmlData(data); }
+            // }
+            // catch (error) {
+            //     console.error(error);
+            // }
             //console.log(`data received ${data.command_type}`)
-        })
+        }
     }
+    // async isLogFunction(){
+
+    // }
     fileHtmlData(data) {
         /*
         let int8Array = new Uint8Array(124);
@@ -1124,10 +1275,11 @@ class winsockClass {
         // for (let i = 0; i < int8Array.length; i++) {
         //     console.log(`data.value[${i}]=${int8Array[i]} `)
         // }
-        // let newData = new Uint8Array(int8Array.length + 4);
+        // let newData =:13 new Uint8Array(int8Array.length + 4);
         // newData.set(int8Array, 4)
         //let int16Array = new Uint16Array(data.value);
         //console.log(`int16Array length ${typeof (int8Array).length}${int8Array.length}`)
+        //console.log(data.value[12] = `${data.value[12]}`)
         obj.register12 = data.value[12];
         obj.register13 = data.value[13];
         obj.register14 = data.value[14];
@@ -1153,10 +1305,11 @@ class winsockClass {
         drawdiag.drawTime.text(nowTime.toLocaleString());
     }
 }
-let winsockCharger = new winsockClass("192.168.0.57")
-
+let winsockCharger = new winsockClass()
+var eventsss
 function addEventArray() {
     let Reg_12 = 0x00; let Reg_13 = 0x00; let Reg_14 = 0x00; let Reg_15 = 0x00;
+    let sendData;
     for (let i = 0; i < 16; i++) {
         let idName12 = `12regbit_${i}`;
         let idName13 = `13regbit_${i}`;
@@ -1167,7 +1320,7 @@ function addEventArray() {
             let chk = document.getElementById(ide);
             //console.log("------" + ide);
             chk.addEventListener('click', (e) => {
-                //console.log(e.offsetX + "click")
+                eventsss = e
                 Reg_12 = 0x00; Reg_13 = 0x00; Reg_14 = 0x00; Reg_15 = 0x00;
                 let iddName12; let iddName13; let iddName14; let iddName15;
                 for (let j = 0; j < 16; j++) {
@@ -1177,12 +1330,33 @@ function addEventArray() {
                     if (document.getElementById(iddName14).checked) Reg_14 |= 1 << 15 - j;
                     if (document.getElementById(iddName15).checked) Reg_15 |= 1 << 15 - j;
                 }
-                // console.log(`reg_12 = ${Reg_12}`);
-                // console.log(`reg_13 = ${Reg_13}`);
-                // console.log(`reg_14 = ${Reg_14}`);
-                // console.log(`reg_15 = ${Reg_15}`);
+                if (e.target.id.includes('12regbit')) {
+                    //console.log('12regbit' + "   click")
+                    sendData = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': Reg_12 }); /* BIT 12 =0 열림*/
+                }
+                if (e.target.id.includes('13regbit')) {
+                    //console.log('13regbit' + "   click")
+                    sendData = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 13, 'set': Reg_13 }); /* BIT 13 =0 열림*/
+                }
+                if (e.target.id.includes('14regbit')) {
+                    //console.log('14regbit' + "   click")
+                    sendData = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 14, 'set': Reg_14 }); /* BIT 14 =0 열림*/
+                }
+                if (e.target.id.includes('15regbit')) {
+                    //console.log('15regbit' + "   click")
+                    sendData = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 15, 'set': Reg_15 }); /* BIT 15 =0 열림*/
+                }
+                if (webSocket.readyState === webSocket.OPEN)
+                    webSocket.send(sendData);
+                else console.log("socket was closed");
+
                 let int8Array = new Uint8Array(124);
+                let arrayBuffer = int8Array.buffer;
+                let dataView = new DataView(arrayBuffer);
+                dataView.setUint32(0, (new Date()).getTime() / 1000 + 9 * 3600, 1);
+                int8Array = dataView.buffer
                 obj.register12 = Reg_12; obj.register13 = Reg_13; obj.register14 = Reg_14; obj.register15 = Reg_15;
+                console.log('------------------here')
                 modData.addDataArray(int8Array, Reg_12, Reg_13, Reg_14, Reg_15);//
             });
         });
@@ -1219,6 +1393,105 @@ document.getElementById('stopButton').addEventListener('click', (e) => {
     console.log("click")
     fireAlarmStatus(false);
 });
+document.getElementById('viewLog').addEventListener('click', (e) => {
+    console.log("viewLog click")
+    document.getElementById('HtmlMainView').style.display = 'none';
+    document.getElementById('HtmlLogView').style.display = 'grid';
+    document.getElementById('viewBasic').style.display = 'none';
+    document.getElementById('sectionNetworkInfo').style.display = 'none';
+});
+document.getElementById('htmlMain').addEventListener('click', (e) => {
+    console.log("viewLog click")
+    document.getElementById('HtmlMainView').style.display = 'block';
+    document.getElementById('HtmlLogView').style.display = 'none';
+    document.getElementById('viewBasic').style.display = 'none';
+    document.getElementById('sectionNetworkInfo').style.display = 'none';
+});
+document.getElementById('viewB').addEventListener('click', (e) => {
+    console.log("viewLog click")
+    document.getElementById('HtmlMainView').style.display = 'none';
+    document.getElementById('HtmlLogView').style.display = 'none';
+    document.getElementById('viewBasic').style.display = 'block';
+    document.getElementById('sectionNetworkInfo').style.display = 'none';
+});
+document.getElementById('viewN').addEventListener('click', (e) => {
+    console.log("viewLog click")
+    document.getElementById('HtmlMainView').style.display = 'none';
+    document.getElementById('HtmlLogView').style.display = 'none';
+    document.getElementById('viewBasic').style.display = 'none';
+    document.getElementById('sectionNetworkInfo').style.display = 'grid';
+});
+//logout
+document.getElementById('logout').addEventListener('click', (e) => {
+    setCookie("login", "", new Date(0));
+    window.location.href = "login.html";
+});
+document.getElementById('IpAddressbtn').addEventListener('click', (e) => {
+    ValidateIPaddress(document.getElementById('IpAddresstxt').value)
+});
+document.getElementById('timesetbtn').addEventListener('click', (e) => {
+    //ValidateIPaddress(document.getElementById('timesetbtn').value)
+});
+
+
+function downloadCSV(tableId) {
+    let table = document.getElementById(tableId);
+    let rows = table.rows;
+    let csvContent = "";
+
+    // Loop through rows
+    for (let i = 0; i < rows.length; i++) {
+        let cells = rows[i].cells;
+
+        // Loop through cells in a row
+        for (let j = 0; j < cells.length; j++) {
+            // Get cell value and add to CSV content
+            let cellValue = cells[j].textContent.trim();
+            if (j !== cells.length - 1) {
+                csvContent += encodeURI(cellValue) + ",\t";
+            } else {
+                csvContent += encodeURI(cellValue) + "\n";
+            }
+        }
+    }
+
+    // Prompt user to choose filename and location
+    let filename = tableId
+    // Create Blob object
+    let link = document.createElement("a");
+    csvContent = "%EF%BB%BF" + csvContent
+    link.href = "data:text/csv;charset=utf-8," + (csvContent);
+    link.download = filename + ".csv";
+    link.click();
+}
+
+document.getElementById('saveAlarmBtn').addEventListener('click', (e) => {
+    downloadCSV("AlarmTable");
+});
+document.getElementById('saveEventBtn').addEventListener('click', (e) => {
+    downloadCSV("EventTable");
+});
+
+
+document.getElementById('btnQuery1').addEventListener('click', (e) => {
+    const data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': 0b0000111000000000 }); /* BIT 12 =0 열림*/
+    console.log("Query to server")
+    console.log(data);
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+})
+document.getElementById('timesettxt').value = new Date().toLocaleString()
+
+document.getElementById('btnLogRead').addEventListener('click', (e) => {
+    console.log("log_download")
+    webSocket.send("log_download");
+});
+// const data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': register12 }); /* BIT 12 =0 열림*/
+// if (webSocket.readyState === webSocket.OPEN)
+//     webSocket.send(data);
+// else console.log("socket was closed");
+
 //event = new CustomEvent('click');
 //window.dispatchEvent(event);
 
@@ -1238,7 +1511,27 @@ drawdiag.drawSymbol();
 drawdiag.commandDraw();
 drawdiag.warningAlarm(false);
 const modData = new modbusDataArrayClass();
+//var ipv4_address = $('#ipv4');
+// ipv4_address.inputmask({
+//     alias: "ip",
+//     greedy: false //The initial mask shown will be "" instead of "-____".
+// });
 window.onload = function () {
     //console.log("onLoad");
-    testClassCode();
+    let loginCookie = getCookie("login");
+    // If the cookie exists and is not expired, the user is logged in
+    if (loginCookie && new Date() < new Date(loginCookie)) {
+        console.log("login ok")
+        document.getElementById('HtmlMainView').style.display = 'grid';
+        document.getElementById('HtmlLogView').style.display = 'grid';
+        document.getElementById('viewBasic').style.display = 'none';
+        document.getElementById('testRoutine').style.display = 'block';
+        document.getElementById('sectionNetworkInfo').style.display = 'grid';
+        testClassCode();
+    }
+    else {
+        window.location.href = "login.html";
+        return false;
+    }
+    // If the cookie does not exist or is expired, the user is not logged in
 };

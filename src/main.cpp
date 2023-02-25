@@ -95,7 +95,7 @@ void logfileRead(int32_t iStart, int32_t iEnd);
 void sendModbusDataToSocket();
 void sendBufferDataToSocket(uint8_t num);
 void logwrite_event();
-void WritHoldeRegister(int address,int len );
+void WritHoldeRegister(int address, int len);
 int logCount();
 int clientReadTimeout(int timeout);
 
@@ -568,6 +568,7 @@ void log_configCallback(cmd *cmdPtr)
 void time_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
+  doc_tx["command_type"] = cmd.getName(); // + String(chp);
   bool if_modified = false;
   if (!Client.connected())
     return;
@@ -591,6 +592,7 @@ void time_configCallback(cmd *cmdPtr)
   if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
   {
     Client.printf("\r\nError Wrong Ip %s", strValue);
+    doc_tx["error"] = "Error Wrong Ip";
     return;
   }
   else
@@ -603,6 +605,7 @@ void time_configCallback(cmd *cmdPtr)
   if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
   {
     Client.printf("\r\nError Wrong Ip %s", strValue);
+    doc_tx["error"] = "Error Wrong Ip";
     return;
   }
   else
@@ -615,7 +618,14 @@ void time_configCallback(cmd *cmdPtr)
     getNtpTime();
   if (if_modified)
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+
+    doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
+    doc_tx["ntp1"] = IPAddress(ipAddress_struct.NTP_1).toString();
+    doc_tx["ntp2"] = IPAddress(ipAddress_struct.NTP_2).toString();
 }
+
+
+
 void user_configCallback(cmd *cmdPtr)
 {
   FILE *fp;
@@ -769,6 +779,7 @@ void mv_configCallback(cmd *cmdPtr)
 void ip_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
+  doc_tx["command_type"] = cmd.getName(); // + String(chp);
 #ifndef Client
   if (!Client.connected())
     return;
@@ -788,6 +799,15 @@ void ip_configCallback(cmd *cmdPtr)
     Client.printf("\r\ndns2 %s", dns2.toString());
     Client.printf("\r\nwebsocketserver %s", websocketserver.toString());
     Client.printf("\r\nwebSocketPort %d\r\n", webSocketPort);
+
+    doc_tx["ipaddress"] = ipaddress.toString();
+    doc_tx["gateway"] = gateway.toString();
+    doc_tx["subnetmask"] = subnetmask.toString();
+    doc_tx["dns1"] = dns1.toString();
+    doc_tx["dns2"] = dns2.toString();
+    doc_tx["websocketserver"] = websocketserver.toString();
+    doc_tx["webSocketPort"] = webSocketPort;
+
     return;
   }
   // Now
@@ -798,6 +818,7 @@ void ip_configCallback(cmd *cmdPtr)
     if (ipaddress.fromString(strValue) == false)
     {
       Client.printf("\r\nError Wrong Ip %s", strValue);
+      doc_tx["error"] = "Error Wrong Ip";
       return;
     }
   }
@@ -871,18 +892,15 @@ void ip_configCallback(cmd *cmdPtr)
   Client.printf("\r\nwebserverport %d", ipAddress_struct.WEBSERVERPORT);
   Client.printf("\r\nWould you like to change IpAddress? \r\n I will be affect after reboot.(Y/n) ");
 
-  int c = clientReadTimeout(10000);
-  // while (1)
+  // int c = clientReadTimeout(10000);
+
+  // if (c == 'Y')
   // {
-  //   int c = Client.read();
-  if (c == 'Y')
-  {
-  }
-  else if (c == 'n' || c == -1)
-  {
-    Client.printf("\r\nCanceled...");
-    return;
-  }
+  // }
+  // else if (c == 'n' || c == -1)
+  // {
+  //   Client.printf("\r\nCanceled...");
+  //   return;
   // }
   EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
   EEPROM.commit();
@@ -896,6 +914,14 @@ void ip_configCallback(cmd *cmdPtr)
   fp = fopen("/spiffs/ipaddress.txt", "r");
   fread((nvsSystemSet *)&ipAddress_struct, sizeof(nvsSystemSet), 1, fp);
   fclose(fp);
+
+  doc_tx["ipaddress"] = ipaddress.toString();
+  doc_tx["gateway"] = gateway.toString();
+  doc_tx["subnetmask"] = subnetmask.toString();
+  doc_tx["dns1"] = dns1.toString();
+  doc_tx["dns2"] = dns2.toString();
+  doc_tx["websocketserver"] = websocketserver.toString();
+  doc_tx["webSocketPort"] = webSocketPort;
 
   Client.printf("\r\nSucceed.. You can use reboot command\r\n");
 }
@@ -1256,8 +1282,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         // qRequest[0] = 0x06;
         // qRequest[1] = reg;
         // qRequest[2] = set;
-        WritHoldeRegister(reg,set);
-        //xQueueSend(h_queue, &qRequest, (TickType_t)0);
+        WritHoldeRegister(reg, set);
+        // xQueueSend(h_queue, &qRequest, (TickType_t)0);
       }
       else if (!String(req_type).compareTo("timeSet"))
       {
@@ -1682,9 +1708,8 @@ void readnWriteEEProm()
     ipAddress_struct.DNS1 = IPAddress(8, 8, 8, 8).operator uint32_t();
     ipAddress_struct.DNS2 = IPAddress(164, 124, 101, 2).operator uint32_t();
     ipAddress_struct.WEBSERVERPORT = 81;
-
-    ipAddress_struct.NTP_1 = (uint32_t)(IPAddress((uint8_t *)"203.248.240.140")); //(203, 248, 240, 140);
-    ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13, 209, 84, 50);
+    ipAddress_struct.NTP_1 = (uint32_t)IPAddress(203,248,240,140); //(203, 248, 240, 140);
+    ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13,209,84,50); (uint32_t)IPAddress(13, 209, 84, 50);
     ipAddress_struct.ntpuse = false;
 
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));

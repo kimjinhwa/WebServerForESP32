@@ -35,7 +35,7 @@
             <li><a id="htmlMain" href="#">운전상태</a></li>
             <li><a id="viewLog" href="#">로그보기</a></li>
             <li><a id="viewB" href="#">기본정보</a></li>
-            <li><a id="viewN" href="#">네트웍설정</a></li>
+            <li><a id="viewN" href="#">설정</a></li>
             <li><a id="logout" href="#">Logout</a></li>
         </ul>
         <ul class="navbar_icons">
@@ -187,7 +187,7 @@
             <input type=checkbox id="15regbit_7"></chekbox>
             <input type=checkbox id="15regbit_8"></chekbox>
             <input type=checkbox id="15regbit_9"></chekbox>
-            <input type=checkbox id="15regbit_10" ></chekbox>
+            <input type=checkbox id="15regbit_10"></chekbox>
             <input type=checkbox id="15regbit_11"></chekbox>
             <input type=checkbox id="15regbit_12"></chekbox>
             <input type=checkbox id="15regbit_13"></chekbox>
@@ -217,13 +217,57 @@
         <p>Received Data : <span id="modbusData"></span></p>
     </div>
     <div id="HtmlLogView">
-        <h1 id="idlog">LogView</h1>
+        <div class="gridHeadng"><H2>로그보기</H2></div>
+        <div class="div" id="alarmDiv">
+            <section >
+            <h1>Alarm Event</h1>
+            <h6></h6>
+            </section>
+            <section id="secSaveAlarmBtn">
+            <input type="button" id="saveAlarmBtn" value="파일로 저장">
+            </section>
+        </div>
+        <div class="div" id="eventDiv">
+            <section >
+            <h1>Event</h1>
+            <h6></h6>
+            </section>
+            <section id="secSaveEventBtn">
+            <input type="button" id="saveEventBtn" value="파일로 저장">
+            </section>
+        </div>
+
     </div>
     <div id="viewBasic">
         <h1 id="idviewBasic">기본정보</h1>
     </div>
-    <div id="viewSetNetwork">
-        <h1 id="idsetNetwork">네트웍설정</h1>
+    <div class="sectionNetworkInfo" id="sectionNetworkInfo">
+        <h1 id="idsetNetwork" style="margin-left: 50%;">네트웍설정</h1>
+        <div class="viewSetNetwork" id="viewSetNetwork">
+            <div><label class="cssLblNetwork" id="IpAddresslbl">IP ADDRESS변경</label></div>
+            <div> <input type="text" inputmode="url" placeholder="192.168.0.57" id="IpAddresstxt"> </div>
+            <div><input type="button" id="IpAddressbtn" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">SUBNET MASK변경</label></div>
+            <div> <input type="text" inputmode="url" placeholder="255.255.255.0" id=""> </div>
+            <div><input type="button" id="" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">GATE WAY 변경</label></div>
+            <div> <input type="text" inputmode="url" placeholder="255.255.255.0" id=""> </div>
+            <div><input type="button" id="" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">NTP1 IP 변경(TimeServer)</label></div>
+            <div> <input type="text" inputmode="url" placeholder="203.248.240.140" id=""> </div>
+            <div><input type="button" id="" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">NTP2 IP 변경(TimeServer)</label></div>
+            <div> <input type="text" inputmode="url" placeholder="13.209.84.50" id=""> </div>
+            <div><input type="button" id="" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="timesetlbl">SNMP 시간동기화</label></div>
+            <div> <input type="text" id="timesettxt" readonly> </div>
+            <div><input type="button" id="timesetbtn" value="변경"></div>
+        </div>
     </div>
     <!-- 여기까지이다. -->
 
