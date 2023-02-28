@@ -110,6 +110,9 @@ IPAddress subnetmask(255, 255, 255, 0);
 IPAddress dns1(164, 124, 101, 2);
 IPAddress dns2(8, 8, 8, 8);
 IPAddress websocketserver(192, 168, 0, 57);
+IPAddress ntp_1(203, 248, 240, 140);
+IPAddress ntp_2(13, 209, 84, 50);
+
 uint16_t webSocketPort = 81;
 QueueHandle_t h_queue;
 QueueHandle_t h_sendSocketQueue;
@@ -293,8 +296,6 @@ static int fnmatch(const char *pattern, const char *string, int flags)
 }
 void listDir(const char *path, char *match)
 {
-  if (!Client.connected())
-    return;
   DIR *dir = NULL;
   struct dirent *ent;
   char type;
@@ -396,8 +397,6 @@ void listDir(const char *path, char *match)
 //----------------------------------------------------
 static int file_copy(const char *to, const char *from)
 {
-  if (!Client.connected())
-    return 0;
   FILE *fd_to;
   FILE *fd_from;
   char buf[1024];
@@ -477,19 +476,17 @@ int clientReadTimeout(int timeout)
 void init_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
   //
-  Client.printf("\r\nipaddress %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString());
-  Client.printf("gateway %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString());
-  Client.printf("subnetmask %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString());
-  Client.printf("dns1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString());
-  Client.printf("dns2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString());
-  Client.printf("websocketserver %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
+  Client.printf("\r\nipaddress %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString().c_str());
+  Client.printf("gateway %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString().c_str());
+  Client.printf("subnetmask %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString().c_str());
+  Client.printf("dns1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString().c_str());
+  Client.printf("dns2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString().c_str());
+  Client.printf("websocketserver %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString().c_str());
   Client.printf("webSocketPort %d\r\n", ipAddress_struct.WEBSERVERPORT);
-  Client.printf("NTP_1 %s\r\n", IPAddress(ipAddress_struct.NTP_1).toString());
-  Client.printf("NTP_2 %s\r\n", IPAddress(ipAddress_struct.NTP_2).toString());
+  Client.printf("NTP_1 %s\r\n", IPAddress(ipAddress_struct.NTP_1).toString().c_str());
+  Client.printf("NTP_2 %s\r\n", IPAddress(ipAddress_struct.NTP_2).toString().c_str());
   Client.printf("NTP USE %d\r\n", ipAddress_struct.ntpuse);
   Client.printf("\r\nWould you like to change Defult Setting? \r\n It will be reboot now.(Y/n) ");
 
@@ -529,7 +526,7 @@ void printLocalTime()
 }
 void getNtpTime()
 {
-  configTime(gmtOffset_sec, daylightOffset_sec, IPAddress(ipAddress_struct.NTP_1).toString().c_str(), IPAddress(ipAddress_struct.NTP_2).toString().c_str());
+  configTime(gmtOffset_sec, daylightOffset_sec, ntp_1.toString().c_str(), ntp_2.toString().c_str());
   printLocalTime();
 }
 void log_configCallback(cmd *cmdPtr)
@@ -570,8 +567,6 @@ void time_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   doc_tx["command_type"] = cmd.getName(); // + String(chp);
   bool if_modified = false;
-  if (!Client.connected())
-    return;
   printLocalTime();
   RtcDateTime now = Rtc.GetDateTime();
   printDateTime(now);
@@ -588,43 +583,100 @@ void time_configCallback(cmd *cmdPtr)
   }
 
   strArg = cmd.getArgument("ntp1");
-  strValue = strArg.getValue();
-  if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
+  if (strArg.isSet())
   {
-    Client.printf("\r\nError Wrong Ip %s", strValue);
-    doc_tx["error"] = "Error Wrong Ip";
-    return;
-  }
-  else
-  {
-    ipAddress_struct.NTP_1 = (uint32_t)(IPAddress((uint8_t *)strValue.c_str()));
-    if_modified = true;
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong NTP1 Ip address %s", strValue);
+      doc_tx["error"] = "Error Wrong Ip ntp1";
+      return;
+    }
+    else
+    {
+      ntp_1.fromString(strValue);
+      ipAddress_struct.NTP_1 = (uint32_t)ntp_1;
+      if_modified = true;
+    }
   }
   strArg = cmd.getArgument("ntp2");
-  strValue = strArg.getValue();
-  if (IPAddress().fromString(strValue) == false || strValue.length() < 8)
+  if (strArg.isSet())
   {
-    Client.printf("\r\nError Wrong Ip %s", strValue);
-    doc_tx["error"] = "Error Wrong Ip";
-    return;
-  }
-  else
-  {
-    ipAddress_struct.NTP_2 = (uint32_t)(IPAddress((uint8_t *)strValue.c_str()));
-    if_modified = true;
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong NTP2 Ip address %s", strValue);
+      doc_tx["error"] = "Error Wrong Ip ntp2";
+      return;
+    }
+    else
+    {
+      ntp_2.fromString(strValue);
+      ipAddress_struct.NTP_2 = (uint32_t)ntp_2;
+      if_modified = true;
+    }
   }
 
   if (ipAddress_struct.ntpuse)
     getNtpTime();
+
   if (if_modified)
+  {
+
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+    EEPROM.commit();
+  }
 
-    doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
-    doc_tx["ntp1"] = IPAddress(ipAddress_struct.NTP_1).toString();
-    doc_tx["ntp2"] = IPAddress(ipAddress_struct.NTP_2).toString();
+  doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
+  doc_tx["ntp1"] = IPAddress(ipAddress_struct.NTP_1).toString();
+  doc_tx["ntp2"] = IPAddress(ipAddress_struct.NTP_2).toString();
 }
-
-
+void ntptime_configCallback(cmd *cmdPtr)
+{
+  Command cmd(cmdPtr);
+  doc_tx["command_type"] = cmd.getName(); // + String(chp);
+  readnWriteEEProm();
+  Client.printf("IPADDRESS %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString());
+  Client.printf("GATEWAY %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString());
+  Client.printf("SUBNETMASK %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString());
+  Client.printf("WEBSOCKETSERVER %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
+  Client.printf("DNS1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString());
+  Client.printf("DNS2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString());
+  Client.printf("NTP_1 %s\r\n", ntp_1.toString().c_str());
+  Client.printf("NTP_2 %s\r\n", ntp_2.toString().c_str());
+  Client.printf("WEBSERVERPORT %d\r\n", ipAddress_struct.WEBSERVERPORT);
+  Client.printf("ntpuse %d\r\n", ipAddress_struct.ntpuse);
+  configTime(0, 0, ntp_1.toString().c_str(), ntp_2.toString().c_str());
+  // Wait for time to be set, or use RTC time if NTP server is not available
+  time_t now = time(nullptr);
+  while (now < 100000)
+  {
+    delay(1000);
+    now = time(nullptr);
+    Client.printf("\n\rRTC time set to system time %ld", now);
+    if (now < 100000)
+    {
+      // Use RTC time if NTP server is not available and RTC is write-protected
+      struct timeval tv;
+      gettimeofday(&tv, nullptr);
+      // rtc.SetDateTime(tv.tv_sec);
+      Client.println("\n\rRTC time set to system time");
+      break;
+    }
+  }
+  if (now >= 100000)
+  {
+    // Set the RTC time to the system time
+    // rtc.SetDateTime(now);
+    doc_tx["message"] = "RTC time was syncronized with NTP time"; // + String(chp);
+    Client.println("\n\rRTC time was syncronized with NTP time");
+  }
+  else
+  {
+    doc_tx["message"] = "NTP server not available, check ntp server ipaddress time"; // + String(chp);
+    Client.println("\n\rNTP server not available, check ntp server ipaddress time");
+  }
+}
 
 void user_configCallback(cmd *cmdPtr)
 {
@@ -690,16 +742,12 @@ void ls_configCallback(cmd *cmdPtr)
     doc_tx["command_type"] = cmd.getName(); // + String(chp);
     doc_tx["reply"] = " Command Succeed";
   }
-  if (!Client.connected())
-    return;
   listDir("/spiffs/", NULL);
 }
 
 void rm_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
   Client.printf("\r\n");
@@ -716,10 +764,6 @@ void rm_configCallback(cmd *cmdPtr)
 void readFromFile(String filename)
 {
   FILE *f;
-#ifndef Client
-  if (!Client.connected())
-    return;
-#endif
   f = fopen(filename.c_str(), "r");
   if (f == NULL)
   {
@@ -739,16 +783,12 @@ void readFromFile(String filename)
 void reboot_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Client.printf("\r\nNow System Rebooting...\r\n");
   esp_restart();
 }
 void cat_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
   Client.printf("\r\n");
@@ -762,16 +802,12 @@ void cat_configCallback(cmd *cmdPtr)
 // void del_configCallback(cmd *cmdPtr)
 // {
 //   Command cmd(cmdPtr);
-//   if (!Client.connected())
-//     return;
 //   Client.printf(cmd.getName().c_str());
 //   Client.printf(" command done\r\n");
 // }
 void mv_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Client.printf(cmd.getName().c_str());
   Client.printf(" command done\r\n");
 }
@@ -780,10 +816,7 @@ void ip_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
   doc_tx["command_type"] = cmd.getName(); // + String(chp);
-#ifndef Client
-  if (!Client.connected())
-    return;
-#endif
+
   String strValue;
 
   readnWriteEEProm();
@@ -792,12 +825,14 @@ void ip_configCallback(cmd *cmdPtr)
 
   if (!strArg.isSet())
   {
-    Client.printf("\r\nipaddress %s", ipaddress.toString());
-    Client.printf("\r\ngateway %s", gateway.toString());
-    Client.printf("\r\nsubnetmask %s", subnetmask.toString());
-    Client.printf("\r\ndns1 %s", dns1.toString());
-    Client.printf("\r\ndns2 %s", dns2.toString());
-    Client.printf("\r\nwebsocketserver %s", websocketserver.toString());
+    Client.printf("\r\nipaddress %s", ipaddress.toString().c_str());
+    Client.printf("\r\ngateway %s", gateway.toString().c_str());
+    Client.printf("\r\nsubnetmask %s", subnetmask.toString().c_str());
+    Client.printf("\r\ndns1 %s", dns1.toString().c_str());
+    Client.printf("\r\ndns2 %s", dns2.toString().c_str());
+    Client.printf("\r\nNTP_1 %s", ntp_1.toString().c_str());
+    Client.printf("\r\nNTP_2 %s", ntp_2.toString().c_str());
+    Client.printf("\r\nwebsocketserver %s", websocketserver.toString().c_str());
     Client.printf("\r\nwebSocketPort %d\r\n", webSocketPort);
 
     doc_tx["ipaddress"] = ipaddress.toString();
@@ -805,74 +840,130 @@ void ip_configCallback(cmd *cmdPtr)
     doc_tx["subnetmask"] = subnetmask.toString();
     doc_tx["dns1"] = dns1.toString();
     doc_tx["dns2"] = dns2.toString();
+    doc_tx["ntp1"] = ntp_1.toString();
+    doc_tx["ntp2"] = ntp_2.toString();
     doc_tx["websocketserver"] = websocketserver.toString();
     doc_tx["webSocketPort"] = webSocketPort;
+    doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
 
     return;
   }
   // Now
+  bool if_modified = false;
   strArg = cmd.getArgument("ipaddr");
   strValue = strArg.getValue();
   if (strArg.isSet())
   {
-    if (ipaddress.fromString(strValue) == false)
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong Ip %s", strValue);
-      doc_tx["error"] = "Error Wrong Ip";
+      Client.printf("\r\nError Wrong Ip address %s", strValue);
+      doc_tx["error"] = "Error Wrong Ipaddress ";
       return;
+    }
+    else
+    {
+      ipaddress.fromString(strValue);
+      ipAddress_struct.IPADDRESS = (uint32_t)ipaddress;
+      if_modified = true;
     }
   }
 
   strArg = cmd.getArgument("gateway");
-  strValue = strArg.getValue();
-  if (strArg.isSet())
-    if (gateway.fromString(strValue) == false)
-    {
-      Client.printf("\r\nError Wrong wateway %s", strValue);
-      return;
-    }
-
-  strArg = cmd.getArgument("subnet");
-  strValue = strArg.getValue();
-  if (strArg.isSet())
-    if (subnetmask.fromString(strValue) == false)
-    {
-      Client.printf("\r\nError Wrong subnet %s", strValue);
-      return;
-    }
-
-  strArg = cmd.getArgument("websocket");
-  strValue = strArg.getValue();
-  if (strArg.isSet())
-    if (websocketserver.fromString(strValue) == false)
-    {
-      Client.printf("\r\nError Wrong websocket %s", strValue);
-      return;
-    }
-
-  strArg = cmd.getArgument("dns1");
-  strValue = strArg.getValue();
-  if (strArg.isSet())
-    if (dns1.fromString(strValue) == false)
-    {
-      Client.printf("\r\nError Wrong dns1 %s", strValue);
-      return;
-    }
-
-  strArg = cmd.getArgument("dns2");
-  strValue = strArg.getValue();
-  if (strArg.isSet())
-    if (dns2.fromString(strValue) == false)
-    {
-      Client.printf("\r\nError Wrong dns2 %s", strValue);
-      return;
-    }
-
-  strArg = cmd.getArgument("socketport");
-  int port;
   if (strArg.isSet())
   {
-    port = strArg.getValue().toInt();
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong gateway %s", strValue);
+      doc_tx["error"] = "Error Wrong gateway";
+      return;
+    }
+    else
+    {
+      gateway.fromString(strValue);
+      ipAddress_struct.GATEWAY = (uint32_t)gateway;
+      if_modified = true;
+    }
+  }
+  strArg = cmd.getArgument("subnetmask");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong subnetmask %s", strValue);
+      doc_tx["error"] = "Error Wrong subnetmask";
+      return;
+    }
+    else
+    {
+      subnetmask.fromString(strValue);
+      ipAddress_struct.SUBNETMASK = (uint32_t)subnetmask;
+      if_modified = true;
+    }
+  }
+  strArg = cmd.getArgument("websocket");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong websocketserver %s", strValue);
+      doc_tx["error"] = "Error Wrong websocketserver";
+      return;
+    }
+    else
+    {
+      websocketserver.fromString(strValue);
+      ipAddress_struct.WEBSOCKETSERVER = (uint32_t)websocketserver;
+      if_modified = true;
+    }
+  }
+
+  strArg = cmd.getArgument("dns1");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong dns1 %s", strValue);
+      doc_tx["error"] = "Error Wrong dns1";
+      return;
+    }
+    else
+    {
+      dns1.fromString(strValue);
+      ipAddress_struct.DNS1 = (uint32_t)dns1;
+      if_modified = true;
+    }
+  }
+
+  strArg = cmd.getArgument("dns2");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    if (IPAddress().fromString(strValue) == false)
+    {
+      Client.printf("\r\nError Wrong dns2 %s", strValue);
+      doc_tx["error"] = "Error Wrong dns2";
+      return;
+    }
+    else
+    {
+      dns2.fromString(strValue);
+      ipAddress_struct.DNS2 = (uint32_t)dns2;
+      if_modified = true;
+    }
+  }
+  strArg = cmd.getArgument("socketport");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    uint16_t port = strValue.toInt();
+    webSocketPort = port;
+    ipAddress_struct.WEBSERVERPORT = port;
+    if_modified = true;
   }
 
   ipAddress_struct.IPADDRESS = (uint32_t)ipaddress;
@@ -920,23 +1011,22 @@ void ip_configCallback(cmd *cmdPtr)
   doc_tx["subnetmask"] = subnetmask.toString();
   doc_tx["dns1"] = dns1.toString();
   doc_tx["dns2"] = dns2.toString();
+  doc_tx["ntp1"] = ntp_1.toString();
+  doc_tx["ntp2"] = ntp_2.toString();
   doc_tx["websocketserver"] = websocketserver.toString();
   doc_tx["webSocketPort"] = webSocketPort;
+  doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
 
   Client.printf("\r\nSucceed.. You can use reboot command\r\n");
 }
 void date_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Client.printf(" command done\r\n");
 }
 void df_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  if (!Client.connected())
-    return;
   Client.printf("\r\nESP32 Partition table:\r\n");
   Client.printf("| Type | Sub |  Offset  |   Size   |       Label      |\r\n");
   Client.printf("| ---- | --- | -------- | -------- | ---------------- |\r\n");
@@ -962,8 +1052,6 @@ void df_configCallback(cmd *cmdPtr)
 void errorCallback(cmd_error *errorPtr)
 {
   CommandError e(errorPtr);
-  if (!Client.connected())
-    return;
 
   Client.printf((String("ERROR: ") + e.toString()).c_str());
 
@@ -996,8 +1084,10 @@ void SimpleCLISetUp()
   cmd_ls_config = cli.addCommand("time", time_configCallback);
   cmd_ls_config.addFlagArgument("s/et");
   cmd_ls_config.addArgument("n/tpuse", "255");
-  cmd_ls_config.addArgument("ntp1", 0); // time.bora.net
-  cmd_ls_config.addArgument("ntp2", 0); // kr.pool.ntp.org
+  cmd_ls_config.addArgument("ntp1", "<ip address>"); // time.bora.net
+  cmd_ls_config.addArgument("ntp2", "<ip address>"); // kr.pool.ntp.org
+
+  cmd_ls_config = cli.addCommand("ntptime", ntptime_configCallback);
 
   cmd_ls_config = cli.addSingleArgCmd("rm", rm_configCallback);
 
@@ -1010,13 +1100,13 @@ void SimpleCLISetUp()
   // cmd_ls_config = cli.addCommand("del", del_configCallback);
   cmd_ls_config = cli.addCommand("mv", mv_configCallback);
 
-  cmd_ls_config = cli.addCommand("ip", ip_configCallback);
+  cmd_ls_config = cli.addCommand("ipaddress", ip_configCallback);
   cmd_ls_config.addFlagArgument("s/et");
-  cmd_ls_config.addArgument("i/paddr", "192.168.0.57");
-  cmd_ls_config.addArgument("s/ubnet", "255.255.255.0");
-  cmd_ls_config.addArgument("g/ateway", "192.168.0.1");
-  cmd_ls_config.addArgument("w/ebsocket", "192.168.0.7");
-  cmd_ls_config.addArgument("so/cketport", "81");
+  cmd_ls_config.addArgument("i/paddr", "<ip address>");
+  cmd_ls_config.addArgument("s/ubnetmask", "<ip address>");
+  cmd_ls_config.addArgument("g/ateway", "<ip address>");
+  cmd_ls_config.addArgument("websocket", "<ip address>");
+  cmd_ls_config.addArgument("socketport", "81");
   cmd_ls_config.addArgument("dns1", "8.8.8.8");
   cmd_ls_config.addArgument("dns2", "164.124.101.2");
 
@@ -1248,11 +1338,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     if (de_err)
     {
       printf("");
+      Client.printf("requset Type is not JSON Type \r\n");
       break;
     }
     else
     {
       const char *req_type = doc_tx["command_type"].as<const char *>();
+      Client.printf("requset Type  is %s \r\n", req_type);
 
       if (!String(req_type).compareTo("logRead"))
       {
@@ -1264,6 +1356,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         // sendString += String(set);
         doc_tx["command_type"] = sendString; // + String(chp);
         webRequestNo = -1;
+        sendString = "";
+        serializeJson(doc_tx, sendString);
+        webSocket.sendTXT(num, sendString);
+      }
+      else if (!String(req_type).compareTo("ping"))
+      {
+        doc_tx.clear();
+        doc_tx["command_type"] = "pong";
         sendString = "";
         serializeJson(doc_tx, sendString);
         webSocket.sendTXT(num, sendString);
@@ -1304,25 +1404,41 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
             timeinfo.tm_min,
             timeinfo.tm_sec);
         Rtc.SetDateTime(dt);
-        ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
+        printLocalTime();
+
+        doc_tx.clear();
+        doc_tx["command_type"] = "timeSet";
+        doc_tx["year"] = timeinfo.tm_year - 100;
+        doc_tx["mon"] = timeinfo.tm_mon + 1;
+        doc_tx["day"] = timeinfo.tm_mday;
+        doc_tx["hour"] = timeinfo.tm_hour;
+        doc_tx["min"] = timeinfo.tm_min;
+        doc_tx["sec"] = timeinfo.tm_sec;
+
+        sendString = "";
+        serializeJson(doc_tx, sendString);
+        webSocket.sendTXT(num, sendString);
+        break;
+        /// ESP_LOGD(TAG, "\nreq_type=%s reg=%d set=%d", req_type, reg, set);
       }
-      else
+      else // 일반 CLI명령을 수행한다.
       {
         doc_tx.clear();
-        // doc_tx["command_type"] = req_type; // + String(chp);
-        //  doc_tx["reg"]
-        //  doc_tx["set"]
+
+        Client.printf("requset Type is %s\r\n", req_type);
         webRequestNo = 1;
         cli.parse(req_type);
-        // char req_buf[2000];
-        // strncpy(req_buf, req_type, strlen(req_type));
-        // strcat(req_buf,sendString.c_str());
-
+        sendString = "";
+        serializeJson(doc_tx, sendString);
+        // Client.printf("%s\r\n", sendString);
+        webSocket.sendTXT(num, sendString);
+        /*
         int16_t qSocketSendRequest[5];
         qSocketSendRequest[0] = 0x0A;
         qSocketSendRequest[1] = num;
         qSocketSendRequest[2] = 0x00;
         xQueueSend(h_sendSocketQueue, &qSocketSendRequest, (TickType_t)0);
+        */
       }
     }
     break;
@@ -1636,8 +1752,6 @@ int telnet_write(const char *format, va_list ap)
   vsnprintf(buf, 512, format, ap);
   int len = strlen(buf);
 
-  if (Client.connected())
-    Client.write(buf, len);
   free(buf);
   return len;
 }
@@ -1656,8 +1770,6 @@ int telnet_write(const char *format, va_list ap)
 // {
 //   // udp.broadcastTo(data, 1234);
 //   //WiFiClient *client= (WiFiClient *)userdata;
-//   if (Client.connected())
-//   {
 //     //Client = (WiFiClient  *)userdata;
 //     Client.printf(ptr);
 //     Client.flush();
@@ -1702,14 +1814,14 @@ void readnWriteEEProm()
     Serial.printf("\n\rInitialize....Ipset memory....to default..");
     EEPROM.writeByte(0, 0x55);
     ipAddress_struct.IPADDRESS = (uint32_t)IPAddress(192, 168, 0, 57);
-    ipAddress_struct.GATEWAY = IPAddress(192, 168, 0, 1).operator uint32_t();
-    ipAddress_struct.SUBNETMASK = IPAddress(255, 255, 255, 0).operator uint32_t();
-    ipAddress_struct.WEBSOCKETSERVER = IPAddress(192, 168, 0, 57).operator uint32_t();
-    ipAddress_struct.DNS1 = IPAddress(8, 8, 8, 8).operator uint32_t();
-    ipAddress_struct.DNS2 = IPAddress(164, 124, 101, 2).operator uint32_t();
+    ipAddress_struct.GATEWAY = (uint32_t)IPAddress(192, 168, 0, 1);
+    ipAddress_struct.SUBNETMASK = (uint32_t)IPAddress(255, 255, 255, 0);
+    ipAddress_struct.WEBSOCKETSERVER = (uint32_t)IPAddress(192, 168, 0, 57);
+    ipAddress_struct.DNS1 = (uint32_t)IPAddress(8, 8, 8, 8);
+    ipAddress_struct.DNS2 = (uint32_t)IPAddress(164, 124, 101, 2);
     ipAddress_struct.WEBSERVERPORT = 81;
-    ipAddress_struct.NTP_1 = (uint32_t)IPAddress(203,248,240,140); //(203, 248, 240, 140);
-    ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13,209,84,50); (uint32_t)IPAddress(13, 209, 84, 50);
+    ipAddress_struct.NTP_1 = (uint32_t)IPAddress(203, 248, 240, 140); //(203, 248, 240, 140);
+    ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13, 209, 84, 50);
     ipAddress_struct.ntpuse = false;
 
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
@@ -1724,6 +1836,8 @@ void readnWriteEEProm()
   dns2 = IPAddress(ipAddress_struct.DNS2);
   websocketserver = IPAddress(ipAddress_struct.WEBSOCKETSERVER);
   webSocketPort = ipAddress_struct.WEBSERVERPORT;
+  ntp_1 = IPAddress(ipAddress_struct.NTP_1);
+  ntp_2 = IPAddress(ipAddress_struct.NTP_2);
 }
 
 // /*     여기 까지    */
@@ -1783,8 +1897,8 @@ void printDateTime(const RtcDateTime &dt)
              dt.Hour(),
              dt.Minute(),
              dt.Second());
-  Serial.print("\r\nDs1302 RTC Time is ");
-  Serial.print(datestring);
+  Client.printf("\r\nDs1302 RTC Time is ");
+  Client.printf(datestring);
 }
 void setRtc()
 {
@@ -1919,7 +2033,7 @@ void loop()
   if (now - previousmills > interval)
   {
     time(&nowTime);
-    doc_tx["command_type"] = "time";
+    doc_tx["command_type"] = "nowtime";
     doc_tx["time"] = nowTime - gmtOffset_sec;
     serializeJson(doc_tx, sendString);
     webSocket.broadcastTXT(sendString);

@@ -7,7 +7,7 @@ warningSound.muted = false;
 warningSound.autoplay = true;
 var alarmStatus = false;
 var connectUrl = "192.168.0.57"
-var webSocket = new WebSocket('ws://' + connectUrl + ':81/');
+
 warningSound.load();
 function ValidateIPaddress(inputText) {
     let ipformat = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
@@ -16,7 +16,7 @@ function ValidateIPaddress(inputText) {
     }
     else {
         alert("입력값의 형식이 잘못 되었습니다.!");
-        document.form1.text1.focus(); return false;
+        return false;
     }
 }
 
@@ -139,6 +139,7 @@ function fireAlarmStatus(status) {
     // document.dispatchEvent(alarmStatusEvent);
 }
 //const modBusDataArray = [/* log data received from UPS monitoring system */];
+
 
 class drawDiagram {
     constructor(x, y) {
@@ -708,7 +709,7 @@ class modBusDataClass {
         const arrayBuffer = int8Array.buffer;
         const dataView = new DataView(arrayBuffer);
         this.logTime = dataView.getUint32(0, 1) * 1000;
-        console.log(`logTime(${this.logTime}) =  ${new Date((this.logTime))}`)
+        //console.log(`logTime(${this.logTime}) =  ${new Date((this.logTime))}`)
 
         for (let i = 0; i < 60; i++) {
             this.modBus60[i] = dataView.getInt16(4 + (2 * i), 1);
@@ -1137,12 +1138,6 @@ class modbusDataArrayClass {
     }
 }
 
-setInterval(() => {
-    if (webSocket.readyState !== webSocket.OPEN) {
-        let newWebSocket = new WebSocket('ws://' + connectUrl + ':81/');
-        webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
-    }
-}, 5000);
 var isDownloadComplete = false;
 var socketCommand = "";
 async function isLogFunction(event) {
@@ -1171,7 +1166,7 @@ async function isLogFunction(event) {
             }
         }
         //console.log("LogFile request start...");
-        return;
+        return 0;
     }
     if (event.data === "download_complete") {
         console.log("LogFile download complete..." + typeof (event.data));
@@ -1191,7 +1186,7 @@ async function isLogFunction(event) {
 
         });
         //processReceivedData(receiveData );
-        return;
+        return 0;
     }
 
     if (socketCommand === "log_download_start" || typeof (event.data) == Object) {
@@ -1212,11 +1207,139 @@ async function isLogFunction(event) {
             }
         });
         receiveData += event.data;
-        return;
+        return 0;
     }
+    return 1;
 }
-class winsockClass {
-    constructor() {
+var isPingReceive = true;
+var pingStartTime = new Date().getTime()
+var pingEndTime = new Date().getTime() + 3000;
+var retryCount = 0;
+setInterval(() => {
+    pingEndTime = new Date().getTime()
+    if (pingStartTime + 2 * 1000 < pingEndTime) {
+        //2초 이내에 여기에 들어 온다
+        //이제 반드시 isPingReceive true가 되어 있어야 한다
+        if (isPingReceive === true)
+            console.log('network alive')
+        else {
+            statusBar.style = "color: red;"
+            statusBar.innerHTML = "네트웍 재 접속중..." + retryCount++
+            webSocket = null
+            let newWebSocket = new myWebSocket('ws://' + connectUrl + ':81/');
+            webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
+
+        }
+    }
+    if (webSocket.readyState === webSocket.OPEN) {
+        let data = JSON.stringify({ 'command_type': 'ping' });
+        isPingReceive = false;
+        pingStartTime = new Date().getTime()
+        webSocket.send(data)
+    }
+    if (webSocket.readyState !== webSocket.OPEN) {
+    }
+}, 3000);
+function setWebSocketOnEvent(webSocket) {
+    webSocket.addEventListener('open', (event) => {
+        setWebSocketOnEvent(webSocket)
+        console.log("WebSocket connection opened");
+        statusBar.style = "color: blue;";
+        statusBar.innerHTML = "네트웍 접속 완료";
+        retryCount = 0
+    })
+    webSocket.addEventListener('error', (event) => {
+        console.log("WebSocket error:", error);
+    })
+
+    // webSocket.addEventListener('close', (event) => {
+    //     console.log(`socket Close from ${connectUrl}`);
+    //     console.log('Socket retry connect....');
+    //     setTimeout(() => {
+    //         statusBar.style = "color: red;"
+    //         statusBar.innerHTML = "네트웍 접속 끊김 ...재 접속중..."
+    //         webSocket = null;
+    //         let newWebSocket = new myWebSocket('ws://' + connectUrl + ':81/');
+    //         webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
+    //     }, 1000);
+    // })
+
+    webSocket.addEventListener('message', async (event) => {
+        isPingReceive = true;
+        var ret = await isLogFunction(event)
+        if (ret === 1) {
+            try {
+                let data = JSON.parse(event.data);
+                //console.log(`data.command_type ${typeof (data)} == ${data.command_type}`)
+                if (data.command_type == 'nowtime') {
+                    winsocksubData.showTime(data);
+                }
+                else if (data.command_type == 'pong') {
+                    console.log(`get pong net work alive`)
+                }
+                else if (data.command_type == 'modbus') {
+                    winsocksubData.fileHtmlData(data);
+                }
+                else if (data.command_type == 'timeSet') {
+                    statusBar.style = "color: blue;"
+                    statusBar.innerHTML = ""
+                    for (let key in data) {
+                        statusBar.innerHTML += `${key}=${data[key]}  `
+                        //console.log(`${key}=${data[key]}`)
+                    };
+
+                }
+                else if (data.command_type == 'time') {
+                    //alert(message)
+                    console.log(event.data)
+                    statusBar.innerHTML = `request command='${data.command_type}' answer received`
+                    statusBar.style = "color: blue;"
+                    ntp1Txt.value = data.ntp1
+                    ntp2Txt.value = data.ntp2
+                    ntpuseChkbox.checked = data.ntpuse
+                    statusbar.innerHTML = data.message
+                }
+                else if (data.command_type == 'ipaddress') {
+                    statusBar.innerHTML = `request command='${data.command_type}' answer received`
+                    statusBar.style = "color: blue;"
+                    IpAddresstxt.value = data.ipaddress
+                    subnetMaskTxt.value = data.subnetmask
+                    gatewayTxt.value = data.gateway
+                    webSocketServerTxt.value = data.websocketserver
+                    webSocketPortTxt.value = data.webSocketPort
+                    ntpuseChkbox.checked = data.ntpuse
+
+                }
+                else {
+                    statusBar.innerHTML = `request command='${data.command_type}' answer received`
+                    statusBar.style = "color: blue;"
+                    console.log(`ret value ${ret}`)
+                    console.log(event.data)
+                }
+
+
+            }
+            catch (error) {
+                //webSocket
+                webSocket.close();
+                webSocket = null;
+                setTimeout(() => {
+                    const newWebSocket = new myWebSocket('ws://' + connectUrl + ':81/');
+                    webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
+                }, 1000);
+                console.error(error);
+            }
+            //console.log(`data received ${data.command_type}`)
+        }
+    })
+
+
+    // webSocket.onopen = function(event) {
+    // };
+}
+class myWebSocket extends WebSocket {
+    constructor(url) {
+        super(url); // call super() first
         this.modbus_registor = {
             "time": 0,
             "value": [
@@ -1228,58 +1351,16 @@ class winsockClass {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ],
         };
-        webSocket.onclose = (event) => {
-            console.log(`socket Close from ${connectUrl}`);
-            console.log('Socket retry connect....');
-            setTimeout(() => {
-                const newWebSocket = new WebSocket('ws://' + connectUrl + ':81/');
-                webSocket = newWebSocket; // assign the new WebSocket instance to the original variable
-            }, 1000);
-        }
-        webSocket.addEventListener('open', (event) => {
-            console.log(`socket opend to ${connectUrl}`)
-        })
-        webSocket.onmessage = async (event) => {
-            await isLogFunction(event)
-            //console.log(event.data)
-            // try {
-            //     let data = JSON.parse(event.data);
-            //     //console.log(`data.command_type ${typeof (data)} == ${data.command_type}`)
-            //     if (data.command_type == 'time') { this.showTime(data); }
-            //     if (data.command_type == 'modbus') { this.fileHtmlData(data); }
-            // }
-            // catch (error) {
-            //     console.error(error);
-            // }
-            //console.log(`data received ${data.command_type}`)
-        }
+        setWebSocketOnEvent(this);
     }
-    // async isLogFunction(){
 
-    // }
     fileHtmlData(data) {
-        /*
-        let int8Array = new Uint8Array(124);
-        obj.register12 = Reg_12; obj.register13 = Reg_13; obj.register14 = Reg_14; obj.register15 = Reg_15;
-        modData.addDataArray(int8Array, Reg_12, Reg_13, Reg_14, Reg_15);//
-        */
-        // for (let i = 0; i < 30; i++) {
-        //     console.log(`data.value[${i}]=${data.value[i]} `)
-        // }
         let int16Array = new Uint16Array(data.value);
         let int8Array = new Uint8Array(int16Array.length * 2 + 4);
         for (let i = 0; i < int16Array.length; i++) {
             int8Array[4 + i * 2] = int16Array[i] & 0xFF; // lower byte
             int8Array[4 + i * 2 + 1] = (int16Array[i] >> 8) & 0xFF; // upper byte
         }
-        // for (let i = 0; i < int8Array.length; i++) {
-        //     console.log(`data.value[${i}]=${int8Array[i]} `)
-        // }
-        // let newData =:13 new Uint8Array(int8Array.length + 4);
-        // newData.set(int8Array, 4)
-        //let int16Array = new Uint16Array(data.value);
-        //console.log(`int16Array length ${typeof (int8Array).length}${int8Array.length}`)
-        //console.log(data.value[12] = `${data.value[12]}`)
         obj.register12 = data.value[12];
         obj.register13 = data.value[13];
         obj.register14 = data.value[14];
@@ -1305,7 +1386,55 @@ class winsockClass {
         drawdiag.drawTime.text(nowTime.toLocaleString());
     }
 }
-let winsockCharger = new winsockClass()
+var webSocket = new myWebSocket('ws://' + connectUrl + ':81/');
+
+class winsocksubClass {
+    constructor() {
+        this.modbus_registor = {
+            "time": 0,
+            "value": [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ],
+        };
+    }
+    fileHtmlData(data) {
+        let int16Array = new Uint16Array(data.value);
+        let int8Array = new Uint8Array(int16Array.length * 2 + 4);
+        for (let i = 0; i < int16Array.length; i++) {
+            int8Array[4 + i * 2] = int16Array[i] & 0xFF; // lower byte
+            int8Array[4 + i * 2 + 1] = (int16Array[i] >> 8) & 0xFF; // upper byte
+        }
+        obj.register12 = data.value[12];
+        obj.register13 = data.value[13];
+        obj.register14 = data.value[14];
+        obj.register15 = data.value[15];
+        modData.addDataArray(int8Array, data.value[12], data.value[13], data.value[14], data.value[15]);//
+        this.modbus_registor.value = data.value;
+        let el = document.getElementById('modbusData');
+        el.innerHTML = 'Received Data: ';
+        el.innerHTML = data.value;
+        inputVol_R.innerHTML = data.value[20];
+        inputVol_S.innerHTML = data.value[21];
+        inputVol_T.innerHTML = data.value[22];
+        inputAmp_R.innerHTML = data.value[23];
+        inputAmp_S.innerHTML = data.value[24];
+        inputAmp_T.innerHTML = data.value[25];
+        batVoltage.innerHTML = data.value[29];
+        batAmpere.innerHTML = data.value[30];
+        loadRate.innerHTML = data.value[32] + "(%)";
+    }
+    showTime(data) {
+        //console.log(`data.time ${data.time}`)
+        let nowTime = new Date(data.time * 1000);
+        drawdiag.drawTime.text(nowTime.toLocaleString());
+    }
+}
+let winsocksubData = new winsocksubClass()
 var eventsss
 function addEventArray() {
     let Reg_12 = 0x00; let Reg_13 = 0x00; let Reg_14 = 0x00; let Reg_15 = 0x00;
@@ -1426,9 +1555,6 @@ document.getElementById('logout').addEventListener('click', (e) => {
     setCookie("login", "", new Date(0));
     window.location.href = "login.html";
 });
-document.getElementById('IpAddressbtn').addEventListener('click', (e) => {
-    ValidateIPaddress(document.getElementById('IpAddresstxt').value)
-});
 document.getElementById('timesetbtn').addEventListener('click', (e) => {
     //ValidateIPaddress(document.getElementById('timesetbtn').value)
 });
@@ -1474,9 +1600,7 @@ document.getElementById('saveEventBtn').addEventListener('click', (e) => {
 
 
 document.getElementById('btnQuery1').addEventListener('click', (e) => {
-    const data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': 0b0000111000000000 }); /* BIT 12 =0 열림*/
-    console.log("Query to server")
-    console.log(data);
+    let data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': 0b0000111000000000 }); /* BIT 12 =0 열림*/
     if (webSocket.readyState === webSocket.OPEN)
         webSocket.send(data);
     else console.log("socket was closed");
@@ -1487,7 +1611,109 @@ document.getElementById('btnLogRead').addEventListener('click', (e) => {
     console.log("log_download")
     webSocket.send("log_download");
 });
-// const data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': register12 }); /* BIT 12 =0 열림*/
+
+document.getElementById('getServerIpAddress').addEventListener('click', (e) => {
+    let commandData = `ipaddress`;
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('IpAddressbtn').addEventListener('click', (e) => {
+    let text = document.getElementById('IpAddresstxt')
+    if (!ValidateIPaddress(text.value)) {
+        text.value = "0.0.0.0" + text.value;
+        return
+    };
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -ipaddr ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+//
+document.getElementById('subnetBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('subnetMaskTxt')
+    if (!ValidateIPaddress(text.value)) {
+        return
+    };
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -subnetmask ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('gatewayBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('gatewayTxt')
+    if (!ValidateIPaddress(text.value)) {
+        return
+    };
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -gateway ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+
+document.getElementById('ntp1Btn').addEventListener('click', (e) => {
+    let ntpAddress = ntp1Txt.value;
+    let commandData = `time -s -ntp1 ${ntpAddress}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('ntp2Btn').addEventListener('click', (e) => {
+    let ntpAddress = ntp2Txt.value;
+    let commandData = `time -s -ntp2 ${ntpAddress}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('socketServerBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('webSocketServerTxt')
+    if (!ValidateIPaddress(text.value)) {
+        return
+    };
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -websocket ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('socketportBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('webSocketPortTxt')
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -socketport ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+document.getElementById('ntpuseBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('ntpuseChkbox')
+    let checked = text.checked ? 1 : 0;
+    let commandData = `time -s -ntpuse ${checked}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN)
+        webSocket.send(data);
+    else console.log("socket was closed");
+});
+
+
+document.getElementById('timesetbtn').addEventListener('click', (e) => {
+    let nowTime = new Date();
+    const data = JSON.stringify({ 'command_type': 'timeSet', 'reg': 0, 'set': nowTime.getTime() / 1000 }); /* BIT 12 =0 열림*/
+    console.log(data);
+    webSocket.send(data);
+})
+
+// let data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': register12 }); /* BIT 12 =0 열림*/
 // if (webSocket.readyState === webSocket.OPEN)
 //     webSocket.send(data);
 // else console.log("socket was closed");
@@ -1522,8 +1748,10 @@ window.onload = function () {
     // If the cookie exists and is not expired, the user is logged in
     if (loginCookie && new Date() < new Date(loginCookie)) {
         console.log("login ok")
-        document.getElementById('HtmlMainView').style.display = 'grid';
-        document.getElementById('HtmlLogView').style.display = 'grid';
+        //document.getElementById('HtmlMainView').style.display = 'grid';
+        document.getElementById('HtmlMainView').style.display = 'none';
+        //document.getElementById('HtmlLogView').style.display = 'grid';
+        document.getElementById('HtmlLogView').style.display = 'none';
         document.getElementById('viewBasic').style.display = 'none';
         document.getElementById('testRoutine').style.display = 'block';
         document.getElementById('sectionNetworkInfo').style.display = 'grid';

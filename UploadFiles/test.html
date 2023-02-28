@@ -217,23 +217,25 @@
         <p>Received Data : <span id="modbusData"></span></p>
     </div>
     <div id="HtmlLogView">
-        <div class="gridHeadng"><H2>로그보기</H2></div>
+        <div class="gridHeadng">
+            <H2>로그보기</H2>
+        </div>
         <div class="div" id="alarmDiv">
-            <section >
-            <h1>Alarm Event</h1>
-            <h6></h6>
+            <section>
+                <h1>Alarm Event</h1>
+                <h6></h6>
             </section>
             <section id="secSaveAlarmBtn">
-            <input type="button" id="saveAlarmBtn" value="파일로 저장">
+                <input type="button" id="saveAlarmBtn" value="파일로 저장">
             </section>
         </div>
         <div class="div" id="eventDiv">
-            <section >
-            <h1>Event</h1>
-            <h6></h6>
+            <section>
+                <h1>Event</h1>
+                <h6></h6>
             </section>
             <section id="secSaveEventBtn">
-            <input type="button" id="saveEventBtn" value="파일로 저장">
+                <input type="button" id="saveEventBtn" value="파일로 저장">
             </section>
         </div>
 
@@ -244,25 +246,39 @@
     <div class="sectionNetworkInfo" id="sectionNetworkInfo">
         <h1 id="idsetNetwork" style="margin-left: 50%;">네트웍설정</h1>
         <div class="viewSetNetwork" id="viewSetNetwork">
+            <div></div><div></div><label href="" id="getServerIpAddress" style="color: blue;">서버값 가져오기</label>
             <div><label class="cssLblNetwork" id="IpAddresslbl">IP ADDRESS변경</label></div>
             <div> <input type="text" inputmode="url" placeholder="192.168.0.57" id="IpAddresstxt"> </div>
             <div><input type="button" id="IpAddressbtn" value="변경"></div>
 
             <div><label class="cssLblNetwork" id="">SUBNET MASK변경</label></div>
-            <div> <input type="text" inputmode="url" placeholder="255.255.255.0" id=""> </div>
-            <div><input type="button" id="" value="변경"></div>
+            <div> <input type="text" inputmode="url" placeholder="255.255.255.0" id="subnetMaskTxt"> </div>
+            <div><input type="button" id="subnetBtn" value="변경"></div>
 
             <div><label class="cssLblNetwork" id="">GATE WAY 변경</label></div>
-            <div> <input type="text" inputmode="url" placeholder="255.255.255.0" id=""> </div>
-            <div><input type="button" id="" value="변경"></div>
+            <div> <input type="text" inputmode="url" placeholder="192.168.0.1" id="gatewayTxt"> </div>
+            <div><input type="button" id="gatewayBtn" value="변경"></div>
 
             <div><label class="cssLblNetwork" id="">NTP1 IP 변경(TimeServer)</label></div>
-            <div> <input type="text" inputmode="url" placeholder="203.248.240.140" id=""> </div>
-            <div><input type="button" id="" value="변경"></div>
+            <div> <input type="text" inputmode="url" placeholder="203.248.240.140" id="ntp1Txt"> </div>
+            <div><input type="button" id="ntp1Btn" value="변경"></div>
 
             <div><label class="cssLblNetwork" id="">NTP2 IP 변경(TimeServer)</label></div>
-            <div> <input type="text" inputmode="url" placeholder="13.209.84.50" id=""> </div>
-            <div><input type="button" id="" value="변경"></div>
+            <div> <input type="text" inputmode="url" placeholder="13.209.84.50" id="ntp2Txt"> </div>
+            <div><input type="button" id="ntp2Btn" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">WebSocket Server</label></div>
+            <div> <input type="text" inputmode="url" placeholder="192.168.0.57" id="webSocketServerTxt"> </div>
+            <div><input type="button" id="socketServerBtn" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">WebSocket PORT</label></div>
+            <div> <input type="text" placeholder="81" id="webSocketPortTxt"> </div>
+            <div><input type="button" id="socketportBtn" value="변경"></div>
+
+
+            <div><input type=checkbox id="ntpuseChkbox">NTP 사용 </chekbox> </div>
+            <div></div>
+            <div><input type="button" id="ntpuseBtn" value="변경"></div>
 
             <div><label class="cssLblNetwork" id="timesetlbl">SNMP 시간동기화</label></div>
             <div> <input type="text" id="timesettxt" readonly> </div>
@@ -273,7 +289,7 @@
 
     <div class="footer">
         <p style="margin-left: 50px">IFTECH.Co.LTD.http://www.iftech.co.kr</p>
-        <p><label id="statusBar">....</label></p>
+        <p><label id="statusBar" >message</label></p>
         <p style="margin-right: 50px">Ver: V1.0.0.0</p>
     </div>
 
