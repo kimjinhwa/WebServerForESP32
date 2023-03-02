@@ -19,21 +19,22 @@ a {
     display: flex;
     justify-content: center;
     align-items: center;
-    
+
     color: white;
 }
 
 #HtmlMainView {
     display: grid;
-    grid-template-columns:900px;
+    grid-template-columns: 900px;
     justify-content: center;
     align-items: center;
 }
+
 .chargeInfo {
     display: flex;
     margin-top: 10px;
     max-width: 900px;
-    
+
     /* justify-content: center;
     align-items: center;
     width: 100%;
@@ -44,23 +45,29 @@ a {
     /* margin-right: 10px; */
     /* align-items */
 }
-#HtmlLogView{
+
+#HtmlLogView {
     display: grid;
-    grid-template-columns:450px 450px;
-    column-gap: 30px; 
+    grid-template-columns: 450px 450px;
+    column-gap: 30px;
     justify-content: center;
     align-items: center;
 }
-#HtmlLogView #secSaveAlarmBtn,#secSaveEventBtn {
+
+#HtmlLogView #secSaveAlarmBtn,
+#secSaveEventBtn {
     display: grid;
-    justify-content:end
+    justify-content: end
 }
-.gridHeadng{
+
+.gridHeadng {
     grid-column: 1/span 2;
     background-color: #f0fbf7;
-    text-align: center; 
+    text-align: center;
 }
-#eventDiv,#alarmDiv{
+
+#eventDiv,
+#alarmDiv {
     overflow: auto;
     height: 500px;
     font-size: medium;
@@ -68,13 +75,16 @@ a {
     align-items: center;
     justify-content: center;
 }
-#heading{
-   border:#4404aa;
-   font-size: small;
+
+#heading {
+    border: #4404aa;
+    font-size: small;
 }
+
 .inputStatus {
     padding-right: 30px;
 }
+
 .chargerStatus {
     margin-left: 5px;
     margin-right: 5px;
@@ -154,7 +164,7 @@ a {
     color: white;
 }
 
-
+/* menustart*/
 .navbar_menu {
     /* width: 300px; */
 }
@@ -169,7 +179,6 @@ a {
 
 .navbar_menu {
     display: flex;
-    ;
     list-style: none;
     padding-left: 0;
 }
@@ -177,10 +186,30 @@ a {
 .navbar_menu li {
     padding: 8px 12px;
 }
+.firmware_ul >li > a {
+    display: block;
+}
+.firmware_ul :hover {
+    display: block; 
+}
+.firmware_ul li {
+    text-align: center;
+}
+.firmware_ul {
+    list-style: none;
+    display: none;
+    /* display: block; */
+}
 
-.navbar_menu li:hover {
+.firmware_ul >li>a:hover {
+    display: block;
+    background-color: #263343;
+}
+
+.navbar_menu li:hover > ul {
     background-color: #d49466;
     border-radius: 4px;
+    display:block;
 }
 
 .navbar_icons {
@@ -189,6 +218,11 @@ a {
     display: flex;
 }
 
+.navbar_icons li {
+    padding: 8px, 12px;
+}
+
+/* */
 .myCanvas {
     background-color: #eee;
     display: block;
@@ -209,47 +243,55 @@ a {
     color: white;
     text-align: center;
 }
+
 table {
-  border-collapse: collapse;
-  width: 100%;
+    border-collapse: collapse;
+    width: 100%;
 }
 
-th, td {
-  text-align: left;
-  padding: 8px;
+th,
+td {
+    text-align: left;
+    padding: 8px;
 }
 
-tr:nth-child(even){background-color: #f2f2f2}
+tr:nth-child(even) {
+    background-color: #f2f2f2
+}
 
 th {
-  background-color: #04AA6D;
-  color: white;
+    background-color: #04AA6D;
+    color: white;
 }
-.messageBar{
+
+.messageBar {
     color: #4404aa;
 }
-#statusBar{
-    font-size:xx-small; 
+
+#statusBar {
+    font-size: xx-small;
     color: rgb(15, 19, 19);
 }
 
 /* */
-#testRoutinea{
+#testRoutinea {
     display: block;
-    grid-template-columns:250px 200px ; 
+    grid-template-columns: 250px 200px;
     justify-content: center;
     justify-items: center;
     align-items: center;
 }
+
 /* 네트웍 설정 부분*/
-.viewSetNetwork{
+.viewSetNetwork {
     display: grid;
-    grid-template-columns:250px 200px auto; 
+    grid-template-columns: 250px 200px auto;
     justify-content: center;
     row-gap: 15px;
 }
-.cssLblNetwork{
-    font-size:medium;
+
+.cssLblNetwork {
+    font-size: medium;
     font-weight: 700;
     color: rgb(9, 11, 83);
 }

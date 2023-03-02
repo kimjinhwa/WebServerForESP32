@@ -6,7 +6,10 @@ warningSound.loop = true;
 warningSound.muted = false;
 warningSound.autoplay = true;
 var alarmStatus = false;
-var connectUrl = "192.168.0.57"
+var connectUrl = document.location.hostname;//"192.168.0.57"
+if (document.location.hostname.includes("127.0.0")) {
+    connectUrl = "192.168.0.57";// 
+}
 
 warningSound.load();
 function ValidateIPaddress(inputText) {
@@ -1712,6 +1715,12 @@ document.getElementById('timesetbtn').addEventListener('click', (e) => {
     console.log(data);
     webSocket.send(data);
 })
+document.getElementById('firmWareUpload').addEventListener('click', (e) => {
+    document.location = "serverIndex.html";
+})
+document.getElementById('fileUpload').addEventListener('click', (e) => {
+    document.location = "fileUpload.html";
+})
 
 // let data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': register12 }); /* BIT 12 =0 열림*/
 // if (webSocket.readyState === webSocket.OPEN)
@@ -1755,7 +1764,7 @@ window.onload = function () {
         document.getElementById('viewBasic').style.display = 'none';
         document.getElementById('testRoutine').style.display = 'block';
         document.getElementById('sectionNetworkInfo').style.display = 'grid';
-        testClassCode();
+        //testClassCode();
     }
     else {
         window.location.href = "login.html";

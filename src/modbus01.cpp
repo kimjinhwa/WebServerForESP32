@@ -145,7 +145,7 @@ void modBusRtuSetup()
     MB.onDataHandler(&handleData);
     MB.onErrorHandler(&handleError);
     MB.setTimeout(2000);
-    MB.begin();
+    MB.begin(Serial);
 }
 void WritHoldeRegister(int address,int len ){
    Error err = MB.addRequest((uint32_t)millis(), 1, WRITE_HOLD_REGISTER, address, len);

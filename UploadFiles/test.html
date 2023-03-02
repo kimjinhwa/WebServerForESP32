@@ -9,7 +9,7 @@
     <title>Document</title>
     <link rel="stylesheet" href="index.css" />
     <script src="test.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.0/dist/svg.min.js"></script>
+    <script src="svg.min.js"></script>
     <audio id="warning-sound" src="bell-ringing.mp3"></audio>
 </head>
 
@@ -37,6 +37,12 @@
             <li><a id="viewB" href="#">기본정보</a></li>
             <li><a id="viewN" href="#">설정</a></li>
             <li><a id="logout" href="#">Logout</a></li>
+            <li><a id="" href="#">FirmWare</a>
+            <ul class="firmware_ul">
+                <li><a id="firmWareUpload">FirmWare Uplaod</a></li>
+                <li><a id="fileUpload">File Upload</a></li>
+            </ul>
+            </li>
         </ul>
         <ul class="navbar_icons">
             <li><a href="http://www.iftech.co.kr">도움말</a></li>
@@ -246,7 +252,8 @@
     <div class="sectionNetworkInfo" id="sectionNetworkInfo">
         <h1 id="idsetNetwork" style="margin-left: 50%;">네트웍설정</h1>
         <div class="viewSetNetwork" id="viewSetNetwork">
-            <div></div><div></div><label href="" id="getServerIpAddress" style="color: blue;">서버값 가져오기</label>
+            <div></div>
+            <div></div><label href="" id="getServerIpAddress" style="color: blue;">서버값 가져오기</label>
             <div><label class="cssLblNetwork" id="IpAddresslbl">IP ADDRESS변경</label></div>
             <div> <input type="text" inputmode="url" placeholder="192.168.0.57" id="IpAddresstxt"> </div>
             <div><input type="button" id="IpAddressbtn" value="변경"></div>
@@ -276,7 +283,8 @@
             <div><input type="button" id="socketportBtn" value="변경"></div>
 
 
-            <div><input type=checkbox id="ntpuseChkbox">NTP 사용 </chekbox> </div>
+            <div><input type=checkbox id="ntpuseChkbox">NTP 사용 </chekbox>
+            </div>
             <div></div>
             <div><input type="button" id="ntpuseBtn" value="변경"></div>
 
@@ -289,7 +297,7 @@
 
     <div class="footer">
         <p style="margin-left: 50px">IFTECH.Co.LTD.http://www.iftech.co.kr</p>
-        <p><label id="statusBar" >message</label></p>
+        <p><label id="statusBar">message</label></p>
         <p style="margin-right: 50px">Ver: V1.0.0.0</p>
     </div>
 
