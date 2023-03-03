@@ -38,17 +38,22 @@
             <li><a id="viewN" href="#">설정</a></li>
             <li><a id="logout" href="#">Logout</a></li>
             <li><a id="" href="#">FirmWare</a>
-            <ul class="firmware_ul">
-                <li><a id="firmWareUpload">FirmWare Uplaod</a></li>
-                <li><a id="fileUpload">File Upload</a></li>
-            </ul>
+                <ul class="firmware_ul">
+                    <li><a href="serverIndex" id="firmWareUpload">FirmWare Uplaod</a></li>
+                    <li><a id="fileUpload">File Upload</a></li>
+                </ul>
             </li>
         </ul>
         <ul class="navbar_icons">
-            <li><a href="http://www.iftech.co.kr">도움말</a></li>
+            <li><a href="help.html">도움말</a></li>
         </ul>
     </nav>
 
+    <div id="dialog" style="display: none;">
+        <p>경고음을 사용하기 위해서는 확인을 선택하여 주세요.</p>
+        <button id="yes-button">Yes</button>
+        <button id="no-button">No</button>
+    </div>
     <div id="HtmlMainView">
         <div class="drawing" id="drawing"></div>
         <div class="chargeInfo">
@@ -104,11 +109,12 @@
                 </tr>
             </table>
         </div>
+        <div class="alarmBtn">
+            <button id="showButton">Sound Alarm</button>
+            <button id="stopButton">Mute</button>
+        </div>
     </div>
-
     <div id="testRoutine">
-        <button id="showButton">START alarm</button>
-        <button id="stopButton">Stop alarm</button>
         <br>
         <section id="BitLabelInof">Bit No_HL
             <label for="">15</label>
@@ -213,22 +219,26 @@
             <button id="btnQuery7">충전 정지</button>
             <button id="btnQuery8">저전압</button>
             <button id="btnSetTime">TimeSet</button>
-            <button id="btnLogRead">LogRead</button>
             <p>
                 <button id="btnTest">테스트버튼</button><input type="text" name="" id="commandText" />
             </p>
         </div>
     </div>
-    <div class="messageBar">
-        <p>Received Data : <span id="modbusData"></span></p>
-    </div>
     <div id="HtmlLogView">
         <div class="gridHeadng">
             <H2>로그보기</H2>
+            <section>
+                <button id="btnLogRead">로그읽어오기</button>
+            </section>
+        </div>
+
+        <div class="alarmHeading">
+            <section>Alarm </section>
+            <section>Event</section>
         </div>
         <div class="div" id="alarmDiv">
             <section>
-                <h1>Alarm Event</h1>
+                <!-- <h1>Alarm Event</h1> -->
                 <h6></h6>
             </section>
             <section id="secSaveAlarmBtn">
@@ -237,7 +247,7 @@
         </div>
         <div class="div" id="eventDiv">
             <section>
-                <h1>Event</h1>
+                <!-- <h1>Event</h1> -->
                 <h6></h6>
             </section>
             <section id="secSaveEventBtn">
@@ -247,7 +257,34 @@
 
     </div>
     <div id="viewBasic">
-        <h1 id="idviewBasic">기본정보</h1>
+        <h1 id="idviewBasic">충전기 기본정보</h1>
+        <dl class="data-list">
+            <div>
+                <dt >제조년월일:</dt>
+                <dd id="madeDate">2023년 2월 3일</dd>
+            </div>
+            <div>
+                <dt>충전기:</dt>
+                <dd id="chargerCapaciter">용량 30KVA</dd>
+            </div>
+            <div>
+                <dt>입력:</dt>
+                <dd id="inputPhaseVol">3상 380V</dd>
+            </div>
+            <div>
+                <dt>출력:</dt>
+                <dd id="NominalOutput">110V</dd>
+            </div>
+            <div>
+                <dt>제조사:</dt>
+                <dd id="madeByCompany">대농산업전기</dd>
+            </div>
+            <div>
+                <dt>밧데리 셀:</dt>
+                <dd id="installedCells">16셀</dd>
+            </div>
+        </dl>
+
     </div>
     <div class="sectionNetworkInfo" id="sectionNetworkInfo">
         <h1 id="idsetNetwork" style="margin-left: 50%;">네트웍설정</h1>
@@ -291,13 +328,27 @@
             <div><label class="cssLblNetwork" id="timesetlbl">SNMP 시간동기화</label></div>
             <div> <input type="text" id="timesettxt" readonly> </div>
             <div><input type="button" id="timesetbtn" value="변경"></div>
+
+
+            <div><label class="cssLblNetwork" id="">사용자ID변경</label></div>
+            <div> <input type="text" id="useridtxt" > </div>
+            <div><input type="button" id="useridbtn" value="변경"></div>
+
+            <div><label class="cssLblNetwork" id="">비밀번호변경</label></div>
+            <div> <input type="password" id="passwdtxt" > </div>
+            <div><input type="button" id="passwdbtn" value="변경"></div>
+
         </div>
     </div>
     <!-- 여기까지이다. -->
 
+    <div class="messageBar">
+        <p>Received Data : <span id="modbusData"></span></p>
+    </div>
     <div class="footer">
         <p style="margin-left: 50px">IFTECH.Co.LTD.http://www.iftech.co.kr</p>
-        <p><label id="statusBar">message</label></p>
+        <p><label id="statusBar">message</label></p><br>
+
         <p style="margin-right: 50px">Ver: V1.0.0.0</p>
     </div>
 

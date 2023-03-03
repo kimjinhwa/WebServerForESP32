@@ -34,7 +34,7 @@ String loginIndex =
 //
 //"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
 String fileUpload =
-    "<script src='/jquery.min.js'></script>"
+    "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
     "<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
     "<input type='file' name='update' id='file' onchange='sub(this)' style=display:none>"
     "<label id='file-input' for='file'>   Choose file...</label>"

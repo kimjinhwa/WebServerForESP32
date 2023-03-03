@@ -1385,7 +1385,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     else
     {
       const char *req_type = doc_tx["command_type"].as<const char *>();
-      Client.printf("requset Type  is %s \r\n", req_type);
+      //Client.printf("requset Type  is %s \r\n", req_type);
 
       if (!String(req_type).compareTo("logRead"))
       {

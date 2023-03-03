@@ -1,17 +1,52 @@
 "use strict"
-//const warningImage = new Image();
+var soundLoadOk = false;
+var socketCommand = "";
+var sendString = "";
+const audio = document.getElementById('warning-sound');
+const dialog = document.getElementById('dialog');
+const yesButton = document.getElementById('yes-button');
+const noButton = document.getElementById('no-button');
+function showConfirm() {
+    dialog.style.display = 'block';
+    return new Promise(function (resolve, reject) {
+        yesButton.onclick = function () {
+            audio.play();
+            dialog.style.display = 'none';
+            soundLoadOk = true;
+            audio.loop = true;
+            audio.muted = true;
+            resolve(true);
+        };
+        noButton.onclick = function () {
+            dialog.style.display = 'none';
+            soundLoadOk = false;
+            resolve(false);
+        };
+    });
+}
+async function playSound() {
+    try {
+        await audio.play();
+        //console.log("Audio played successfully");
+    } catch (error) {
+        console.log("Error while playing audio:", error);
+        // If the error is due to autoplay blocking, ask the user to interact with the page
+        const result = await showConfirm();
+        if (result) {
+            // If the user clicked "Yes", try to play the audio again
+            playSound();
+        }
+    }
+}
 
-const warningSound = document.getElementById('warning-sound');
-warningSound.loop = true;
-warningSound.muted = false;
-warningSound.autoplay = true;
 var alarmStatus = false;
 var connectUrl = document.location.hostname;//"192.168.0.57"
+var soundMuted = false;
 if (document.location.hostname.includes("127.0.0")) {
     connectUrl = "192.168.0.57";// 
 }
 
-warningSound.load();
+//audio.load();
 function ValidateIPaddress(inputText) {
     let ipformat = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     if (inputText.match(ipformat)) {
@@ -48,19 +83,6 @@ function setCookie(name, value, expires) {
         '; path=/';
     document.cookie = cookie;
 }
-async function loadSound() {
-    //await new Promise(resolve => setTimeout(resolve, 1000));
-    let playPromise = warningSound.play()
-        .then(() => {
-            console.log("sound loaded OK")
-        })
-        .catch((error) => {
-            console.log(`error ${error} `)
-            //loadSound()
-        });
-}
-loadSound();//
-
 let register12 = 0b0000111000000000;
 let register13 = 0b0000000000000011;
 let register14 = 0b0000000000000000;
@@ -129,17 +151,13 @@ Object.defineProperty(obj, 'register15', {
 
 //Function to set the alarm status and trigger the event listener
 function fireAlarmStatus(status) {
-    //drawdiag.warningImage(status);
     try {
         drawdiag.warningAlarm(status);
+        drawdiag.warningImage(status);
         //console.log(`fireAlarmStatus(${status})`)
     } catch (e) {
 
     }
-    //drawdiag.warningImage(event.detail);
-    //alarmStatus = status;
-    // let alarmStatusEvent = new CustomEvent('alarmStatusChanged', { detail: status });
-    // document.dispatchEvent(alarmStatusEvent);
 }
 //const modBusDataArray = [/* log data received from UPS monitoring system */];
 
@@ -152,7 +170,7 @@ class drawDiagram {
         this.wireColor = '#3d8021';
         this.diagram = [];
         this.POWER_LINE_FAIL = 1 < 11;
-        this.width = 850,
+        this.width = 900,
             this.height = 330;
         this.bat_w = 70,
             this.bat_h = 45;
@@ -594,28 +612,11 @@ class drawDiagram {
         else
             this.diagram[13].name
                 .fill('none');
-        // this.alarmImage = this.draw
-        //     .image('alert.svg', function (event) { })
-        //     .move(700, 220)
-        //     .size(70, 70)
-        //     .click(function () {
-        //     })
-        //     .hide()
 
-        // let startTime = Date.now();
-        //.animate({ duration: 2000, ease: '<>', delay: 0, repeat: true })
-        //.opacity(1)
-        //.dmove(50, 50)
-        // alarmImage = this.draw
-        //     .image('alert.svg', function (event) { })
-        //     .move(700, 220)
-        //     .size(70, 70)
-        //     .hide()
     }
     warningImage(showImage) {
-        console.log(`this.alarmImage.show()`)
+        //console.log(`this.alarmImage.show()`)
         if (showImage) {
-            //alarmImage.show();
             if (!alarmStatus) {
                 alarmStatus = true;
                 alarmImage.show();
@@ -637,18 +638,29 @@ class drawDiagram {
         }
     }
     warningAlarm(warning) {
+        // if (!soundLoadOk) {
+        //     console.log("Sound Not loaded yet...");
+        //     //playSound();//
+        //     return;
+        // }
         if (warning) {
             try {
-                warningSound.play()
-                    .then((resolve) => {
-                        console.log("sound load ok")
-                    })
+                if (!soundMuted) {
+                    playSound();
+                    //audio.play()
+                }
             }
             catch (e) {
                 console.log(e);
             }
         }
-        warningSound.muted = !warning;
+        if (soundMuted === true) {
+            audio.muted = true;
+            audio.loop = false;
+            //audio.autoplay = true;
+        }
+        else
+            audio.muted = !warning;
     }
 }
 
@@ -657,7 +669,8 @@ class drawDiagram {
 //         }
 // )
 class modBusDataClass {
-    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) {
+    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) 
+    {
         this.wireColor = '#3d8021';
 
         this.justOnlyEvent = justOnlyEvent;
@@ -1273,6 +1286,10 @@ function setWebSocketOnEvent(webSocket) {
         if (ret === 1) {
             try {
                 let data = JSON.parse(event.data);
+                if (sendString.length > 0 && sendString.includes(data.command_type)) {
+                    alert(`설정완료 ${sendString} ${data.command_type}`)
+                    sendString = "";
+                }
                 //console.log(`data.command_type ${typeof (data)} == ${data.command_type}`)
                 if (data.command_type == 'nowtime') {
                     winsocksubData.showTime(data);
@@ -1382,6 +1399,9 @@ class myWebSocket extends WebSocket {
         batVoltage.innerHTML = data.value[29];
         batAmpere.innerHTML = data.value[30];
         loadRate.innerHTML = data.value[32] + "(%)";
+
+
+
     }
     showTime(data) {
         //console.log(`data.time ${data.time}`)
@@ -1430,6 +1450,13 @@ class winsocksubClass {
         batVoltage.innerHTML = data.value[29];
         batAmpere.innerHTML = data.value[30];
         loadRate.innerHTML = data.value[32] + "(%)";
+        madeDate.innerHTML = `${data.value[0]}년 ${data.value[1]}월 ${data.value[2]}일 `
+        chargerCapaciter.innerHTML = data.value[3] + "KVA";
+        inputPhaseVol.innerHTML = `${data.value[4]}상 ${data.value[5]}V`
+        NominalOutput.innerHTML = `${data.value[7]}V`
+        madeByCompany.innerHTML = data.value[8] === 4 ? "대농산업전기" : "Unknown"
+        installedCells.innerHTML = `${data.value[9]}셀`
+        console.log("---------------------")
     }
     showTime(data) {
         //console.log(`data.time ${data.time}`)
@@ -1519,14 +1546,19 @@ async function testClassCode() {
 
 //12regbit_0
 document.getElementById('showButton').addEventListener('click', (e) => {
+    soundMuted = false;
+    console.log(`sound mute is ${soundMuted}`)
     fireAlarmStatus(true);
 });
 document.getElementById('stopButton').addEventListener('click', (e) => {
-    console.log("click")
+    soundMuted = true;
+    console.log(`sound mute is ${soundMuted}`)
     fireAlarmStatus(false);
 });
 document.getElementById('viewLog').addEventListener('click', (e) => {
     console.log("viewLog click")
+
+    webSocket.send("log_download");
     document.getElementById('HtmlMainView').style.display = 'none';
     document.getElementById('HtmlLogView').style.display = 'grid';
     document.getElementById('viewBasic').style.display = 'none';
@@ -1534,7 +1566,7 @@ document.getElementById('viewLog').addEventListener('click', (e) => {
 });
 document.getElementById('htmlMain').addEventListener('click', (e) => {
     console.log("viewLog click")
-    document.getElementById('HtmlMainView').style.display = 'block';
+    document.getElementById('HtmlMainView').style.display = 'grid';
     document.getElementById('HtmlLogView').style.display = 'none';
     document.getElementById('viewBasic').style.display = 'none';
     document.getElementById('sectionNetworkInfo').style.display = 'none';
@@ -1543,7 +1575,7 @@ document.getElementById('viewB').addEventListener('click', (e) => {
     console.log("viewLog click")
     document.getElementById('HtmlMainView').style.display = 'none';
     document.getElementById('HtmlLogView').style.display = 'none';
-    document.getElementById('viewBasic').style.display = 'block';
+    document.getElementById('viewBasic').style.display = 'grid';
     document.getElementById('sectionNetworkInfo').style.display = 'none';
 });
 document.getElementById('viewN').addEventListener('click', (e) => {
@@ -1558,8 +1590,33 @@ document.getElementById('logout').addEventListener('click', (e) => {
     setCookie("login", "", new Date(0));
     window.location.href = "login.html";
 });
-document.getElementById('timesetbtn').addEventListener('click', (e) => {
-    //ValidateIPaddress(document.getElementById('timesetbtn').value)
+document.getElementById('useridbtn').addEventListener('click', (e) => {
+    let result = window.confirm("사용자 ID를  변경합니다");
+    if (result) {
+        let text = document.getElementById('useridtxt')
+        let ipaddresss = text.value;
+        let commandData = `user -u  ${ipaddresss}`
+        let data = JSON.stringify({ 'command_type': commandData });
+        if (webSocket.readyState === webSocket.OPEN) {
+            sendString = data;
+            webSocket.send(data);
+        }
+        else console.log("socket was closed");
+    }
+});
+document.getElementById('passwdbtn').addEventListener('click', (e) => {
+    let result = window.confirm("비밀번호를 변경합니다");
+    if (result) {
+        let text = document.getElementById('passwdtxt')
+        let ipaddresss = text.value;
+        let commandData = `user -p  ${ipaddresss}`
+        let data = JSON.stringify({ 'command_type': commandData });
+        if (webSocket.readyState === webSocket.OPEN) {
+            sendString = data;
+            webSocket.send(data);
+        }
+        else console.log("socket was closed");
+    }
 });
 
 
@@ -1604,8 +1661,10 @@ document.getElementById('saveEventBtn').addEventListener('click', (e) => {
 
 document.getElementById('btnQuery1').addEventListener('click', (e) => {
     let data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': 0b0000111000000000 }); /* BIT 12 =0 열림*/
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 })
 document.getElementById('timesettxt').value = new Date().toLocaleString()
@@ -1618,8 +1677,10 @@ document.getElementById('btnLogRead').addEventListener('click', (e) => {
 document.getElementById('getServerIpAddress').addEventListener('click', (e) => {
     let commandData = `ipaddress`;
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        //sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('IpAddressbtn').addEventListener('click', (e) => {
@@ -1631,8 +1692,10 @@ document.getElementById('IpAddressbtn').addEventListener('click', (e) => {
     let ipaddresss = text.value;
     let commandData = `ipaddress -s -ipaddr ${ipaddresss}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 //
@@ -1644,8 +1707,10 @@ document.getElementById('subnetBtn').addEventListener('click', (e) => {
     let ipaddresss = text.value;
     let commandData = `ipaddress -s -subnetmask ${ipaddresss}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('gatewayBtn').addEventListener('click', (e) => {
@@ -1656,8 +1721,10 @@ document.getElementById('gatewayBtn').addEventListener('click', (e) => {
     let ipaddresss = text.value;
     let commandData = `ipaddress -s -gateway ${ipaddresss}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 
@@ -1665,16 +1732,20 @@ document.getElementById('ntp1Btn').addEventListener('click', (e) => {
     let ntpAddress = ntp1Txt.value;
     let commandData = `time -s -ntp1 ${ntpAddress}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('ntp2Btn').addEventListener('click', (e) => {
     let ntpAddress = ntp2Txt.value;
     let commandData = `time -s -ntp2 ${ntpAddress}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('socketServerBtn').addEventListener('click', (e) => {
@@ -1685,8 +1756,10 @@ document.getElementById('socketServerBtn').addEventListener('click', (e) => {
     let ipaddresss = text.value;
     let commandData = `ipaddress -s -websocket ${ipaddresss}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('socketportBtn').addEventListener('click', (e) => {
@@ -1694,8 +1767,10 @@ document.getElementById('socketportBtn').addEventListener('click', (e) => {
     let ipaddresss = text.value;
     let commandData = `ipaddress -s -socketport ${ipaddresss}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 document.getElementById('ntpuseBtn').addEventListener('click', (e) => {
@@ -1703,8 +1778,10 @@ document.getElementById('ntpuseBtn').addEventListener('click', (e) => {
     let checked = text.checked ? 1 : 0;
     let commandData = `time -s -ntpuse ${checked}`
     let data = JSON.stringify({ 'command_type': commandData });
-    if (webSocket.readyState === webSocket.OPEN)
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
         webSocket.send(data);
+    }
     else console.log("socket was closed");
 });
 
@@ -1713,22 +1790,16 @@ document.getElementById('timesetbtn').addEventListener('click', (e) => {
     let nowTime = new Date();
     const data = JSON.stringify({ 'command_type': 'timeSet', 'reg': 0, 'set': nowTime.getTime() / 1000 }); /* BIT 12 =0 열림*/
     console.log(data);
+    sendString = data;
     webSocket.send(data);
 })
 document.getElementById('firmWareUpload').addEventListener('click', (e) => {
-    document.location = "serverIndex.html";
+    document.location = "serverIndex";
 })
 document.getElementById('fileUpload').addEventListener('click', (e) => {
-    document.location = "fileUpload.html";
+    document.location = "fileUpload";
 })
 
-// let data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': 12, 'set': register12 }); /* BIT 12 =0 열림*/
-// if (webSocket.readyState === webSocket.OPEN)
-//     webSocket.send(data);
-// else console.log("socket was closed");
-
-//event = new CustomEvent('click');
-//window.dispatchEvent(event);
 
 addEventArray(); //배포본에는 사용되지 않을 펑션이다.
 const drawdiag = new drawDiagram(9, 100);
@@ -1746,29 +1817,26 @@ drawdiag.drawSymbol();
 drawdiag.commandDraw();
 drawdiag.warningAlarm(false);
 const modData = new modbusDataArrayClass();
-//var ipv4_address = $('#ipv4');
-// ipv4_address.inputmask({
-//     alias: "ip",
-//     greedy: false //The initial mask shown will be "" instead of "-____".
-// });
 window.onload = function () {
-    //console.log("onLoad");
+
+    console.log("onLoad");
+
     let loginCookie = getCookie("login");
     // If the cookie exists and is not expired, the user is logged in
     if (loginCookie && new Date() < new Date(loginCookie)) {
         console.log("login ok")
-        //document.getElementById('HtmlMainView').style.display = 'grid';
-        document.getElementById('HtmlMainView').style.display = 'none';
-        //document.getElementById('HtmlLogView').style.display = 'grid';
+        document.getElementById('HtmlMainView').style.display = 'grid';
+        //document.getElementById('HtmlMainView').style.display = 'none';
         document.getElementById('HtmlLogView').style.display = 'none';
-        document.getElementById('viewBasic').style.display = 'none';
-        document.getElementById('testRoutine').style.display = 'block';
-        document.getElementById('sectionNetworkInfo').style.display = 'grid';
-        //testClassCode();
+        //document.getElementById('HtmlLogView').style.display = 'none';
+        document.getElementById('viewBasic').style.display = 'none';//'grid';
+        //document.getElementById('testRoutine').style.display = 'none';
+        //document.getElementById('testRoutine').style.display = 'none';
+        document.getElementById('sectionNetworkInfo').style.display ='none';// 'grid';//
+        testClassCode();
     }
     else {
         window.location.href = "login.html";
         return false;
     }
-    // If the cookie does not exist or is expired, the user is not logged in
 };
