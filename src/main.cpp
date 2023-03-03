@@ -98,7 +98,7 @@ void logwrite_event();
 void WritHoldeRegister(int address, int len);
 int logCount();
 int clientReadTimeout(int timeout);
-
+void readFileToWeb(const char *content_type, const char *filename);
 // EthernetClient Client;
 WiFiClient Client;
 // EthernetServer telnetServer(23);
@@ -766,8 +766,7 @@ void rm_configCallback(cmd *cmdPtr)
     return;
   }
 
-
-  //argVal = String("/spiffs/") + argVal;
+  // argVal = String("/spiffs/") + argVal;
   //
   dir = opendir("/spiffs/");
   if (!dir)
@@ -786,17 +785,17 @@ void rm_configCallback(cmd *cmdPtr)
 
   while ((entry = readdir(dir)) != NULL)
   {
-    //Client.printf("find file %s %s \r\n", argVal.c_str(),entry->d_name);
+    // Client.printf("find file %s %s \r\n", argVal.c_str(),entry->d_name);
     if (entry->d_type == DT_REG && strlen(entry->d_name) > ext_len &&
         strcmp(entry->d_name + strlen(entry->d_name) - ext_len, argVal.c_str()) == 0)
     {
       String filePath = "/spiffs/" + String(entry->d_name);
-    //Client.printf("filePath%s", filePath.c_str());
+      // Client.printf("filePath%s", filePath.c_str());
       if (unlink(filePath.c_str()) != 0)
       {
-        //Client.printf("Failed to delete file %s", filePath.c_str());
+        // Client.printf("Failed to delete file %s", filePath.c_str());
       }
-        Client.printf("deleted file %s\r\n", filePath.c_str());
+      Client.printf("deleted file %s\r\n", filePath.c_str());
     }
   }
 }
@@ -1352,7 +1351,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       FILE *fp = fopen("/spiffs/logFile.dat", "r");
       if (fp == NULL)
       {
-        webSocket.sendTXT(num, "File Not Found");
+        webSocket.sendTXT(num, "File Not Fount");
         break;
       }
 
@@ -1385,7 +1384,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     else
     {
       const char *req_type = doc_tx["command_type"].as<const char *>();
-      //Client.printf("requset Type  is %s \r\n", req_type);
+      Client.printf("requset Type  is %s \r\n", req_type);
 
       if (!String(req_type).compareTo("logRead"))
       {
@@ -1528,79 +1527,6 @@ void readInputFromTelnetClient()
 }
 FILE *fUpdate;
 int UpdateSize;
-void endHtml()
-{
-  // webServer.sendHeader("Connection", "close");
-  // webServer.send(200, "text/plain", "");
-}
-void readFileToWeb(const char *content_type, const char *filename)
-{
-  // webServer.sendHeader("Connection", "close");
-  webServer.sendHeader("Connection", "keep-alive");
-  String readString;
-
-  struct stat st;
-  st.st_size = 0;
-
-  int isExist = stat(filename, &st);
-  isExist = st.st_size;
-  Client.printf("file name %s \r\n ", filename);
-  Client.printf("file size  %d\r\n ", st.st_size);
-  if (!isExist)
-  {
-    readString = "file not found ";
-    readString += filename;
-    webServer.send(404, "text/plain", readString);
-    Client.printf("file not exist %s %d\r\n ", filename, st.st_size);
-  }
-
-  char *chp = (char *)malloc(1024);
-  // char *chp = (char *)heap_caps_malloc(st.st_size + 1, MALLOC_CAP_8BIT);
-  if (chp == NULL)
-  {
-    Client.printf("memory error \r\n");
-    readString = "malloc allocate Error";
-    readString += filename;
-    webServer.send(404, "text/plain", readString);
-    endHtml();
-    return;
-  }
-  Client.printf("memory allocated succeed\r\n");
-  fUpdate = fopen(filename, "r");
-  if (fUpdate == NULL)
-  {
-    readString = "Please upload ";
-    readString += filename;
-    webServer.send(404, "text/plain", readString);
-    endHtml();
-    free(chp);
-    return;
-  }
-  while (!feof(fUpdate))
-  {
-    int nRead = fread(chp, 1, 1024, fUpdate);
-    // webServer.send(200, content_type, chp,nRead);
-    // Client.printf("file read %d\r\n", nRead);
-    webServer.sendContent(chp, nRead);
-    // chp[readCount] = 0x00;
-  }
-  fclose(fUpdate);
-  free(chp);
-  endHtml();
-
-  // while ((ch = fgetc(fUpdate)) != EOF)
-  // while (!fUpdate.feof())
-  // {
-  //   {
-  //     int bytesRead = fUpdat.readBytes(chp, sizeof(chp));
-  //     // chp[readCount++] = ch;
-  //   };
-  //   // chp[readCount] = 0x00;
-  //   webServer.send(200, content_type, chp);
-  //   fclose(fUpdate);
-  //   free(chp);
-  // }
-}
 void serverOnset()
 {
   if (!MDNS.begin(host))
@@ -1611,146 +1537,147 @@ void serverOnset()
       delay(1000);
     }
   }
+  webServer.on("/style.css", HTTP_GET, []()
+               {
+    webServer.sendHeader("Connection", "close");
+    webServer.send(200, "text/css", 
+     [](String s){
+      String readString="";
+      fUpdate = fopen("/spiffs/style.css", "r");
+      if(fUpdate==NULL)return String("Please upload style.css");
+      char line[64];
+      while (fgets(line, sizeof(line), fUpdate ))
+      {
+        readString +=  line;
+      }
+      fclose(fUpdate);
+      return readString;
+      }(loginIndex)   
+    ); });
 
-  webServer.onNotFound([]()
-                       {
-    // Handle 404 Not Found errors here
+  webServer.on("/svg.min.js.map", HTTP_GET, []()
+               {
+      readFileToWeb("text/javascript", "/spiffs/svg.min.js.map");
+    // webServer.sendHeader("Connection", "close");
+    // webServer.send(200, "text/javascript", 
+    //  [](String s){
+    //   String readString;
+    //   struct stat st;
+    //   stat("/spiffs/svg.min.js.map", &st) ;
+    //   char* chp= (char*)malloc(1024);
+    //   if(chp == NULL){
+    //     printf("memory error %d\r\n",st.st_size+1);
+    //     readString ="Memory Error";
+    //     return readString ;
+    //   }
+    //   fUpdate = fopen("/spiffs/svg.min.js.map", "r");
+    //   if(fUpdate==NULL)return String("Please upload svg.min.js.map");
+    //   while((!feof(fUpdate)) != EOF){
+    //    int nRead = fread(chp, 1, 1024, fUpdate);
+    //     webServer.sendContent(chp, nRead); 
+    //   };
+    //   fclose(fUpdate);
+    //   free(chp);
+    //   return readString;
+    //   }(loginIndex)   
+    // );
+     });
 
-    String filename;
-    filename = webServer.uri();
-    if (filename.endsWith(".css"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("text/css", filename.c_str());
-    }
-    else if (filename.endsWith(".js"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("text/javascript", filename.c_str());
-    }
-    else if (filename.endsWith(".map"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("text/javascript", filename.c_str());
-    }
-    else if (filename.endsWith(".html"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("text/html", filename.c_str());
-    }
-    else if (filename.endsWith(".gif"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("image/gif", filename.c_str());
-    }
-    else if (filename.endsWith(".png"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("image/png", filename.c_str());
-    }
-    else if (filename.endsWith(".bmp"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("image/bmp", filename.c_str());
-    }
-    else if (filename.endsWith(".ico"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("image/x-icon", filename.c_str());
-    }
-    else if (filename.endsWith(".svg"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("image/svg+xml", filename.c_str());
-    }
-    else if (filename.endsWith(".mp3"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("audio/mpeg", filename.c_str());
-    }
-    else if (filename.endsWith(".wav"))
-    {
-      filename = "/spiffs";
-      filename += webServer.uri();
-      readFileToWeb("audio/wav", filename.c_str());
-    }
-    else {
-      filename ="File not found ";
-      filename += webServer.uri();
-      webServer.send(404, "text/plain", filename );
-      Client.printf("file name %s\r\n",webServer.uri().c_str() );
-    } });
+  webServer.on("/svg.min.js", HTTP_GET, []()
+               {
+      readFileToWeb("text/javascript", "/spiffs/svg.min.js");
+    // webServer.sendHeader("Connection", "close");
+    // webServer.send(200, "text/javascript", 
+    //  [](String s){
+    //   String readString;
+    //   struct stat st;
+    //   stat("/spiffs/svg.min.js", &st) ;
+    //   char* chp= (char*)malloc(1024);
+    //   if(chp == NULL){
+    //     printf("memory error %d\r\n",st.st_size+1);
+    //     readString ="Memory Error";
+    //     return readString ;
+    //   }
+    //   fUpdate = fopen("/spiffs/svg.min.js", "r");
+    //   if(fUpdate==NULL)return String("Please upload svg.min.js");
+    //   while((!feof(fUpdate)) != EOF){
+    //    int nRead = fread(chp, 1, 1024, fUpdate);
+    //     webServer.sendContent(chp, nRead); 
+    //   };
+    //   //readString = "test";
+    //   fclose(fUpdate);
+    //   free(chp);
+    //   return readString;
+    //   }(loginIndex)   
+    // ); 
+    });
 
-  // webServer.on("/styles/", HTTP_GET, []()
-  //              {
-  //                 String filePath = webServer.uri();
-  //                 Client.printf("file name %s",webServer.uri() );
-  //                 if (filePath.startsWith("/styles/")) {
-  //                   filePath.replace("/styles/", "/spiffs/");
-  //                 }
-  //                 readFileToWeb("text/css", filePath.c_str()); });
-  // webServer.on("/styles/*.txt", HTTP_GET, []()
-  //              {
-  //                 String filePath = webServer.uri();
-  //                 Client.printf("file name %s",webServer.uri() );
-  //                 if (filePath.startsWith("/styles/")) {
-  //                   filePath.replace("/styles/", "/spiffs/");
-  //                 }
-  //                 readFileToWeb("text/css", filePath.c_str()); });
-  // webServer.on("/style.css", HTTP_GET, []()
-  //              {
-  //                String filename = "/spiffs";
-  //                filename += webServer.uri();
-  //                readFileToWeb("text/css", filename.c_str()); });
-  // webServer.on("/index.css", HTTP_GET, []()
-  //              {
-  //               //  webServer.sendHeader("Connection", "close");
-  //               //  String readString;
-  //                String filename = "/spiffs";
-  //                filename += webServer.uri();
-  //                Client.println("file exist (stat function)");
-  //                readFileToWeb("text/css", filename.c_str()); });
+  webServer.on("/index.css", HTTP_GET, []()
+               {
+      readFileToWeb("text/css", "/spiffs/index.css");
+    // webServer.sendHeader("Connection", "close");
+    // webServer.send(200, "text/css", 
+    //  [](String s){
+    //   String readString="";
+    //   fUpdate = fopen("/spiffs/index.css", "r");
+    //   if(fUpdate==NULL)return String("Please upload index.css");
+    //   char line[64];
+    //   while (fgets(line, sizeof(line), fUpdate ))
+    //   {
+    //     readString +=  line;
+    //   }
+    //   fclose(fUpdate);
+    //   return readString;
+    //   }(loginIndex)   
+    // ); 
+    });
 
-  // webServer.on("/svg.min.js.map", HTTP_GET, []()
-  //              {
-  //                String filename = "/spiffs";
-  //                filename += webServer.uri();
-  //                readFileToWeb("text/javascript", filename.c_str()); });
-
-  // webServer.on("/svg.min.js", HTTP_GET, []()
-  //              {
-  //                String filename = "/spiffs";
-  //                filename += webServer.uri();
-  //                readFileToWeb("text/javascript", filename.c_str()); });
-
-  // webServer.on("/index.js", HTTP_GET, []()
-  //              {
-  //                String filename = "/spiffs";
-  //                filename += webServer.uri();
-  //                Client.println("file exist (stat function)");
-  //                readFileToWeb("text/css", filename.c_str()); });
+  webServer.on("/index.js", HTTP_GET, []()
+               {
+      readFileToWeb("text/javascript", "/spiffs/index.js");
+    // webServer.sendHeader("Connection", "close");
+    // webServer.send(200, "text/javascript", 
+    //  [](String s){
+    //   String readString="";
+    //   fUpdate = fopen("/spiffs/index.js", "r");
+    //   if(fUpdate==NULL)return String("Please upload index.js");
+    //   char line[64];
+    //   while (fgets(line, sizeof(line), fUpdate ))
+    //   {
+    //     readString +=  line;
+    //   }
+    //   fclose(fUpdate);
+    //   return readString;
+    //   }(loginIndex)   
+    // ); 
+    });
 
   webServer.on("/", HTTP_GET, []()
                {
-                 String filename = "/spiffs/index.html";
-                 Client.printf("file exist (%s)",filename.c_str());
-                 readFileToWeb("text/html", filename.c_str()); });
+
+      readFileToWeb("text/html", "/spiffs/index.html");
+    // webServer.sendHeader("Connection", "close");
+    // webServer.send(200, "text/html", 
+    //  [](String s){
+    //   String readString="";
+    //   fUpdate = fopen("/spiffs/index.html", "r");
+    //   if(fUpdate==NULL)return String("Please upload index.html");
+    //   char line[64];
+    //   while (fgets(line, sizeof(line), fUpdate ))
+    //   {
+    //     readString +=  line;
+    //   }
+    //   fclose(fUpdate);
+    //   return readString;
+    //   }(loginIndex)   
+    // ); 
+    });
 
   // jquery_min_js
-  // webServer.on("/jquery.min.js", HTTP_GET, []()
-  //              {
-  //   webServer.sendHeader("Connection", "close");
-  //   webServer.send(200, "text/javascript", jquery_min_js); });
+  webServer.on("/jquery.min.js", HTTP_GET, []()
+               {
+    webServer.sendHeader("Connection", "close");
+    webServer.send(200, "text/javascript", jquery_min_js); });
   webServer.on("/login", HTTP_GET, []()
                {
     webServer.sendHeader("Connection", "close");
@@ -1838,6 +1765,86 @@ void serverOnset()
           }
         }
       });
+  webServer.onNotFound([]()
+                       {
+    // Handle 404 Not Found errors here
+
+    String filename;
+    filename = webServer.uri();
+    if (filename.endsWith(".css"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("text/css", filename.c_str());
+    }
+    else if (filename.endsWith(".js"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("text/javascript", filename.c_str());
+    }
+    else if (filename.endsWith(".map"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("text/javascript", filename.c_str());
+    }
+    else if (filename.endsWith(".html"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("text/html", filename.c_str());
+      //webServer.sendHeader("Connection", "close");
+      //webServer.send(200, "text/html", "");
+    }
+    else if (filename.endsWith(".gif"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("image/gif", filename.c_str());
+    }
+    else if (filename.endsWith(".png"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("image/png", filename.c_str());
+    }
+    else if (filename.endsWith(".bmp"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("image/bmp", filename.c_str());
+    }
+    else if (filename.endsWith(".ico"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("image/x-icon", filename.c_str());
+    }
+    else if (filename.endsWith(".svg"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("image/svg+xml", filename.c_str());
+    }
+    else if (filename.endsWith(".mp3"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("audio/mpeg", filename.c_str());
+    }
+    else if (filename.endsWith(".wav"))
+    {
+      filename = "/spiffs";
+      filename += webServer.uri();
+      readFileToWeb("audio/wav", filename.c_str());
+    }
+    else {
+      filename ="File not found ";
+      filename += webServer.uri();
+      webServer.send(404, "text/plain", filename );
+      Client.printf("file name %s\r\n",webServer.uri().c_str() );
+    } });
 }
 void timeSet(int year, int mon, int day, int hour, int min, int sec)
 {
@@ -1859,7 +1866,7 @@ void timeSet(int year, int mon, int day, int hour, int min, int sec)
 /* LOG redirection */
 int telnet_write(const char *format, va_list ap)
 {
-  char *buf = (char *)ps_malloc(1024);
+  char *buf = (char *)malloc(1024);
   if (buf == NULL)
   {
     // failed to allocate memory from PSRAM, log an error message
@@ -2159,6 +2166,82 @@ void loop()
   delay(1);
 }
 
+  //webServer.sendHeader("Connection", "close");
+
+  // char *chp = (char *)heap_caps_malloc(st.st_size + 1, MALLOC_CAP_8BIT);
+    // webServer.send(200, content_type, chp,nRead);
+    // Client.printf("file read %d\r\n", nRead);
+    // chp[readCount] = 0x00;
+void readFileToWeb(const char *content_type, const char *filename)
+{
+  struct stat st;
+  st.st_size = 0;
+
+  int isExist = stat(filename, &st);
+  isExist = st.st_size;
+  Client.printf("file name %s \r\n ", filename);
+  Client.printf("file size  %d\r\n ", st.st_size);
+  if (!isExist)
+  {
+    String readString = "file not found ";
+    readString += filename;
+    webServer.send(404, "text/plain", readString);
+    Client.printf("file not exist %s %d\r\n ", filename, st.st_size);
+    return;
+  }
+
+  // Send the "Connection: keep-alive" header to keep the WebSocket connection open
+  webServer.sendHeader("Connection", "keep-alive");
+
+  // Send the headers
+  webServer.sendHeader("Content-Type", content_type);
+  webServer.sendHeader("Content-Length", String(st.st_size));
+  webServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  webServer.sendHeader("Pragma", "no-cache");
+  webServer.sendHeader("Expires", "-1");
+
+  // Send the file data in chunks
+  char *chp = (char *)malloc(1024);
+  if (chp == NULL)
+  {
+    Client.printf("memory error \r\n");
+    String readString = "malloc allocate Error";
+    readString += filename;
+    webServer.send(404, "text/plain", readString);
+    return;
+  }
+  Client.printf("memory allocated succeed\r\n");
+  fUpdate = fopen(filename, "r");
+  if (fUpdate == NULL)
+  {
+    String readString = "Please upload ";
+    readString += filename;
+    webServer.send(404, "text/plain", readString);
+    free(chp);
+    return;
+  }
+  while (!feof(fUpdate))
+  {
+    int nRead = fread(chp, 1, 1024, fUpdate);
+    webServer.sendContent(chp, nRead);
+  }
+  fclose(fUpdate);
+  free(chp);
+  Client.printf("finished send file\r\n");
+}
+
+  // while ((ch = fgetc(fUpdate)) != EOF)
+  // while (!fUpdate.feof())
+  // {
+  //   {
+  //     int bytesRead = fUpdat.readBytes(chp, sizeof(chp));
+  //     // chp[readCount++] = ch;
+  //   };
+  //   // chp[readCount] = 0x00;
+  //   webServer.send(200, content_type, chp);
+  //   fclose(fUpdate);
+  //   free(chp);
+  // }
 // {
 //   // FILE *file = fopen("/spiffs/eventLog.json", "r");
 //   ifstream fin;
