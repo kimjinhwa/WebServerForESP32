@@ -15,6 +15,7 @@
 #define NUM_VALUES 60
 #define READ_INTERVAL 5000
 uint8_t data_ready = 0;
+int modbusErrorCode=0 ;
 
 uint32_t request_time;
 ModbusClientRTU MB(Serial);
@@ -23,6 +24,7 @@ static char TAG[] = "MODBUS";
 int telnet_write(const char *format, va_list ap);
 
 extern modBusData_t modBusData;
+extern  nvsSystemSet ipAddress_struct;
 extern QueueHandle_t h_queue;
 extern QueueHandle_t h_sendSocketQueue;
 extern WiFiClient Client;
@@ -97,7 +99,7 @@ void log_status_change()
 void handleData(ModbusMessage response, uint32_t token)
 {
     // First value is on pos 3, after server ID, function code and length byte
-
+    modbusErrorCode =0;
     response.get(1, data_ready); // function code
     uint16_t offs = 3;
     // if (Client.connected())
@@ -136,6 +138,9 @@ void handleError(Error error, uint32_t token)
     ModbusError me(error);
     if (Client.connected())
         Client.printf("Error response: %02X - %s\r\n", (int)me, (const char *)me);
+        {
+           modbusErrorCode =  (int)me;
+        }
     //  printf("Error response: %02X - %s\n", (int)me, (const char *)me);
     //ESP_LOGE(TAG, "Error response: %02X - %s\n", (int)me, (const char *)me);
 }
@@ -161,6 +166,7 @@ void modbusRequest(void *parameter)
 
     unsigned long previousmills = 0;
     int interval = 2000;
+    interval = ipAddress_struct.Q_INTERVAL < 300? 300: ipAddress_struct.Q_INTERVAL;
     // time_t nowTime;
     unsigned long now;
     esp_log_set_vprintf(telnet_write);
@@ -168,6 +174,7 @@ void modbusRequest(void *parameter)
     while (1)
     {
         now = millis();
+        interval = ipAddress_struct.Q_INTERVAL < 300? 300: ipAddress_struct.Q_INTERVAL;
         if (now - previousmills > interval)
         {
             data_ready = 0;

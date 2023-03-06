@@ -40,19 +40,7 @@
 // #define MAX_SOCK_NUM 12 cunstom ethernet.h ->8 to 12
 
 #define USE_SERIAL Serial
-typedef struct
-{
-  uint32_t IPADDRESS;
-  uint32_t GATEWAY;
-  uint32_t SUBNETMASK;
-  uint32_t WEBSOCKETSERVER;
-  uint32_t DNS1;
-  uint32_t DNS2;
-  uint32_t NTP_1;
-  uint32_t NTP_2;
-  uint16_t WEBSERVERPORT;
-  bool ntpuse;
-} nvsSystemSet;
+const char* ver="1.0.1";
 
 struct UserInfo_s
 {
@@ -68,6 +56,7 @@ const int daylightOffset_sec = 3600;
 nvsSystemSet ipAddress_struct;
 // AsyncUDP udp;
 
+extern int modbusErrorCode;
 static char TAG[] = "Main";
 StaticJsonDocument<2000> doc_tx;
 // StaticJsonDocument<2000> doc_rx;
@@ -120,7 +109,7 @@ QueueHandle_t h_sendSocketQueue;
 void EthLan8720Start();
 void readInputSerial();
 void writeHellowTofile();
-void littleFsInit();
+void littleFsInit(int bformat);
 void SimpleCLISetUp();
 
 String input = "";
@@ -826,6 +815,23 @@ void reboot_configCallback(cmd *cmdPtr)
   Client.printf("\r\nNow System Rebooting...\r\n");
   esp_restart();
 }
+void format_configCallback(cmd *cmdPtr)
+{
+  Command cmd(cmdPtr);
+  Client.printf("\r\nWould you system formating(Y/n)...\r\n");
+  while (1)
+  {
+    int c = Client.read();
+    if (c == 'Y')
+    {
+      littleFsInit(1);
+      Client.printf("\r\nSystem format completed\r\n");
+      return;
+    }
+    if (c == 'n')
+      return;
+  }
+}
 void cat_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
@@ -874,6 +880,9 @@ void ip_configCallback(cmd *cmdPtr)
     Client.printf("\r\nNTP_2 %s", ntp_2.toString().c_str());
     Client.printf("\r\nwebsocketserver %s", websocketserver.toString().c_str());
     Client.printf("\r\nwebSocketPort %d\r\n", webSocketPort);
+    Client.printf("\r\nbaudrate %d\r\n",ipAddress_struct.BAUDRATE );
+    Client.printf("\r\ninterval %d\r\n",ipAddress_struct.Q_INTERVAL);
+    Client.printf("\r\nver %s", ver);
 
     doc_tx["ipaddress"] = ipaddress.toString();
     doc_tx["gateway"] = gateway.toString();
@@ -885,6 +894,9 @@ void ip_configCallback(cmd *cmdPtr)
     doc_tx["websocketserver"] = websocketserver.toString();
     doc_tx["webSocketPort"] = webSocketPort;
     doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
+    doc_tx["baudrate"] = ipAddress_struct.BAUDRATE;
+    doc_tx["interval"] = ipAddress_struct.Q_INTERVAL;
+    doc_tx["ver"] = ver;
 
     return;
   }
@@ -1005,6 +1017,22 @@ void ip_configCallback(cmd *cmdPtr)
     ipAddress_struct.WEBSERVERPORT = port;
     if_modified = true;
   }
+  strArg = cmd.getArgument("baudrate");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    uint16_t baudrate = strValue.toInt();
+    ipAddress_struct.BAUDRATE = baudrate;
+    if_modified = true;
+  }
+  strArg = cmd.getArgument("interval");
+  if (strArg.isSet())
+  {
+    strValue = strArg.getValue();
+    uint16_t interval = strValue.toInt();
+    ipAddress_struct.Q_INTERVAL = interval;
+    if_modified = true;
+  }
 
   ipAddress_struct.IPADDRESS = (uint32_t)ipaddress;
   ipAddress_struct.GATEWAY = (uint32_t)gateway;
@@ -1021,6 +1049,9 @@ void ip_configCallback(cmd *cmdPtr)
   Client.printf("\r\ndns1 %s", IPAddress(ipAddress_struct.DNS1).toString());
   Client.printf("\r\ndns2 %s", IPAddress(ipAddress_struct.DNS2).toString());
   Client.printf("\r\nwebserverport %d", ipAddress_struct.WEBSERVERPORT);
+  Client.printf("\r\nbaudrate %d", ipAddress_struct.BAUDRATE);
+  Client.printf("\r\nmodbus interval %d", ipAddress_struct.Q_INTERVAL);
+  Client.printf("\r\nver %s", ver);
   Client.printf("\r\nWould you like to change IpAddress? \r\n I will be affect after reboot.(Y/n) ");
 
   // int c = clientReadTimeout(10000);
@@ -1056,6 +1087,9 @@ void ip_configCallback(cmd *cmdPtr)
   doc_tx["websocketserver"] = websocketserver.toString();
   doc_tx["webSocketPort"] = webSocketPort;
   doc_tx["ntpuse"] = ipAddress_struct.ntpuse;
+  doc_tx["baudrate"] = ipAddress_struct.BAUDRATE;
+  doc_tx["interval"] = ipAddress_struct.Q_INTERVAL;
+  doc_tx["ver"] = ver;
 
   Client.printf("\r\nSucceed.. You can use reboot command\r\n");
 }
@@ -1134,6 +1168,7 @@ void SimpleCLISetUp()
   cmd_ls_config = cli.addSingleArgCmd("cat", cat_configCallback);
 
   cmd_ls_config = cli.addSingleArgCmd("reboot", reboot_configCallback);
+  cmd_ls_config = cli.addSingleArgCmd("format", format_configCallback);
 
   // cmd_ls_config = cli.addSingleArgCmd("mkdir", mkdir_configCallback);
   //  cmd_ls_config.addArgument("filename","");
@@ -1149,6 +1184,9 @@ void SimpleCLISetUp()
   cmd_ls_config.addArgument("socketport", "81");
   cmd_ls_config.addArgument("dns1", "8.8.8.8");
   cmd_ls_config.addArgument("dns2", "164.124.101.2");
+  cmd_ls_config.addArgument("baudrate", "9600");
+  cmd_ls_config.addArgument("interval", "1000");
+  cmd_ls_config.addArgument("ver", "1.0.1");
 
   cmd_ls_config = cli.addCommand("date", date_configCallback);
 
@@ -1214,6 +1252,7 @@ void EthLan8720Start()
   // WiFi.onEvent(WiFiEvent);
   pinMode(ETH_POWER_PIN, OUTPUT);
   ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO0_IN /*ETH_CLK_MODE*/);
+  int retrycount = 10;
   // digitalWrite(ETH_POWER_PIN,LOW);
 
   if (ETH.config(ipaddress, gateway, subnetmask, dns1, dns2) == false)
@@ -1224,6 +1263,8 @@ void EthLan8720Start()
   {
     printf("\r\nconnecting...");
     delay(1000);
+    if (retrycount--)
+      return;
   }
   printf("\r\nConnected\r\n");
   telnetServer.begin();
@@ -1232,7 +1273,7 @@ void EthLan8720Start()
   printf(ETH.localIP().toString().c_str());
   printf(" 23' to connect");
 }
-void littleFsInit()
+void littleFsInit(int bformat)
 {
   esp_vfs_spiffs_conf_t conf = {
       .base_path = "/spiffs",
@@ -1241,6 +1282,10 @@ void littleFsInit()
       .format_if_mount_failed = true};
   esp_err_t ret = esp_vfs_spiffs_register(&conf);
 
+  if (bformat)
+  {
+    esp_spiffs_format(conf.partition_label);
+  }
   if (ret != ESP_OK)
   {
     if (ret == ESP_FAIL)
@@ -1384,7 +1429,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     else
     {
       const char *req_type = doc_tx["command_type"].as<const char *>();
-      Client.printf("requset Type  is %s \r\n", req_type);
+      // Client.printf("requset Type  is %s \r\n", req_type);
 
       if (!String(req_type).compareTo("logRead"))
       {
@@ -1404,8 +1449,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       {
         doc_tx.clear();
         doc_tx["command_type"] = "pong";
+        doc_tx["modbusStatus"] = modbusErrorCode;
         sendString = "";
         serializeJson(doc_tx, sendString);
+
         webSocket.sendTXT(num, sendString);
       }
       else if (!String(req_type).compareTo("ModBusSet"))
@@ -1538,140 +1585,139 @@ void serverOnset()
     }
   }
   webServer.on("/style.css", HTTP_GET, []()
-               {
-    webServer.sendHeader("Connection", "close");
-    webServer.send(200, "text/css", 
-     [](String s){
-      String readString="";
-      fUpdate = fopen("/spiffs/style.css", "r");
-      if(fUpdate==NULL)return String("Please upload style.css");
-      char line[64];
-      while (fgets(line, sizeof(line), fUpdate ))
-      {
-        readString +=  line;
-      }
-      fclose(fUpdate);
-      return readString;
-      }(loginIndex)   
-    ); });
+               { readFileToWeb("text/css", "/spiffs/style.css"); });
+  // webServer.sendHeader("Connection", "close");
+  // webServer.send(200, "text/css",
+  //  [](String s){
+  //   String readString="";
+  //   fUpdate = fopen("/spiffs/style.css", "r");
+  //   if(fUpdate==NULL)return String("Please upload style.css");
+  //   char line[64];
+  //   while (fgets(line, sizeof(line), fUpdate ))
+  //   {
+  //     readString +=  line;
+  //   }
+  //   fclose(fUpdate);
+  //   return readString;
+  //   }(loginIndex)
+  // );
 
   webServer.on("/svg.min.js.map", HTTP_GET, []()
-               {
-      readFileToWeb("text/javascript", "/spiffs/svg.min.js.map");
-    // webServer.sendHeader("Connection", "close");
-    // webServer.send(200, "text/javascript", 
-    //  [](String s){
-    //   String readString;
-    //   struct stat st;
-    //   stat("/spiffs/svg.min.js.map", &st) ;
-    //   char* chp= (char*)malloc(1024);
-    //   if(chp == NULL){
-    //     printf("memory error %d\r\n",st.st_size+1);
-    //     readString ="Memory Error";
-    //     return readString ;
-    //   }
-    //   fUpdate = fopen("/spiffs/svg.min.js.map", "r");
-    //   if(fUpdate==NULL)return String("Please upload svg.min.js.map");
-    //   while((!feof(fUpdate)) != EOF){
-    //    int nRead = fread(chp, 1, 1024, fUpdate);
-    //     webServer.sendContent(chp, nRead); 
-    //   };
-    //   fclose(fUpdate);
-    //   free(chp);
-    //   return readString;
-    //   }(loginIndex)   
-    // );
-     });
+               { readFileToWeb("text/javascript", "/spiffs/svg.min.js.map"); });
+  // webServer.sendHeader("Connection", "close");
+  // webServer.send(200, "text/javascript", svg_min_js_map); });
+  // webServer.sendHeader("Connection", "close");
+  // webServer.send(200, "text/javascript",
+  //  [](String s){
+  //   String readString;
+  //   struct stat st;
+  //   stat("/spiffs/svg.min.js.map", &st) ;
+  //   char* chp= (char*)malloc(1024);
+  //   if(chp == NULL){
+  //     printf("memory error %d\r\n",st.st_size+1);
+  //     readString ="Memory Error";
+  //     return readString ;
+  //   }
+  //   fUpdate = fopen("/spiffs/svg.min.js.map", "r");
+  //   if(fUpdate==NULL)return String("Please upload svg.min.js.map");
+  //   while((!feof(fUpdate)) != EOF){
+  //    int nRead = fread(chp, 1, 1024, fUpdate);
+  //     webServer.sendContent(chp, nRead);
+  //   };
+  //   fclose(fUpdate);
+  //   free(chp);
+  //   return readString;
+  //   }(loginIndex)
+  // );
+  //
 
   webServer.on("/svg.min.js", HTTP_GET, []()
-               {
-      readFileToWeb("text/javascript", "/spiffs/svg.min.js");
-    // webServer.sendHeader("Connection", "close");
-    // webServer.send(200, "text/javascript", 
-    //  [](String s){
-    //   String readString;
-    //   struct stat st;
-    //   stat("/spiffs/svg.min.js", &st) ;
-    //   char* chp= (char*)malloc(1024);
-    //   if(chp == NULL){
-    //     printf("memory error %d\r\n",st.st_size+1);
-    //     readString ="Memory Error";
-    //     return readString ;
-    //   }
-    //   fUpdate = fopen("/spiffs/svg.min.js", "r");
-    //   if(fUpdate==NULL)return String("Please upload svg.min.js");
-    //   while((!feof(fUpdate)) != EOF){
-    //    int nRead = fread(chp, 1, 1024, fUpdate);
-    //     webServer.sendContent(chp, nRead); 
-    //   };
-    //   //readString = "test";
-    //   fclose(fUpdate);
-    //   free(chp);
-    //   return readString;
-    //   }(loginIndex)   
-    // ); 
-    });
+               { readFileToWeb("text/javascript", "/spiffs/svg.min.js"); });
+  // webServer.sendHeader("Connection", "close");
+  // webServer.send(200, "text/javascript", svg_min_js); });
+  //  webServer.sendHeader("Connection", "close");
+  //  webServer.send(200, "text/javascript",
+  //   [](String s){
+  //    String readString;
+  //    struct stat st;
+  //    stat("/spiffs/svg.min.js", &st) ;
+  //    char* chp= (char*)malloc(1024);
+  //    if(chp == NULL){
+  //      printf("memory error %d\r\n",st.st_size+1);
+  //      readString ="Memory Error";
+  //      return readString ;
+  //    }
+  //    fUpdate = fopen("/spiffs/svg.min.js", "r");
+  //    if(fUpdate==NULL)return String("Please upload svg.min.js");
+  //    while((!feof(fUpdate)) != EOF){
+  //     int nRead = fread(chp, 1, 1024, fUpdate);
+  //      webServer.sendContent(chp, nRead);
+  //    };
+  //    //readString = "test";
+  //    fclose(fUpdate);
+  //    free(chp);
+  //    return readString;
+  //    }(loginIndex)
+  //  );
+  //
 
   webServer.on("/index.css", HTTP_GET, []()
                {
-      readFileToWeb("text/css", "/spiffs/index.css");
-    // webServer.sendHeader("Connection", "close");
-    // webServer.send(200, "text/css", 
-    //  [](String s){
-    //   String readString="";
-    //   fUpdate = fopen("/spiffs/index.css", "r");
-    //   if(fUpdate==NULL)return String("Please upload index.css");
-    //   char line[64];
-    //   while (fgets(line, sizeof(line), fUpdate ))
-    //   {
-    //     readString +=  line;
-    //   }
-    //   fclose(fUpdate);
-    //   return readString;
-    //   }(loginIndex)   
-    // ); 
-    });
+                 readFileToWeb("text/css", "/spiffs/index.css");
+                 // webServer.sendHeader("Connection", "close");
+                 // webServer.send(200, "text/css",
+                 //  [](String s){
+                 //   String readString="";
+                 //   fUpdate = fopen("/spiffs/index.css", "r");
+                 //   if(fUpdate==NULL)return String("Please upload index.css");
+                 //   char line[64];
+                 //   while (fgets(line, sizeof(line), fUpdate ))
+                 //   {
+                 //     readString +=  line;
+                 //   }
+                 //   fclose(fUpdate);
+                 //   return readString;
+                 //   }(loginIndex)
+                 // );
+               });
 
   webServer.on("/index.js", HTTP_GET, []()
                {
-      readFileToWeb("text/javascript", "/spiffs/index.js");
-    // webServer.sendHeader("Connection", "close");
-    // webServer.send(200, "text/javascript", 
-    //  [](String s){
-    //   String readString="";
-    //   fUpdate = fopen("/spiffs/index.js", "r");
-    //   if(fUpdate==NULL)return String("Please upload index.js");
-    //   char line[64];
-    //   while (fgets(line, sizeof(line), fUpdate ))
-    //   {
-    //     readString +=  line;
-    //   }
-    //   fclose(fUpdate);
-    //   return readString;
-    //   }(loginIndex)   
-    // ); 
-    });
+                 readFileToWeb("text/javascript", "/spiffs/index.js");
+                 // webServer.sendHeader("Connection", "close");
+                 // webServer.send(200, "text/javascript",
+                 //  [](String s){
+                 //   String readString="";
+                 //   fUpdate = fopen("/spiffs/index.js", "r");
+                 //   if(fUpdate==NULL)return String("Please upload index.js");
+                 //   char line[64];
+                 //   while (fgets(line, sizeof(line), fUpdate ))
+                 //   {
+                 //     readString +=  line;
+                 //   }
+                 //   fclose(fUpdate);
+                 //   return readString;
+                 //   }(loginIndex)
+                 // );
+               });
 
   webServer.on("/", HTTP_GET, []()
-               {
-
-      readFileToWeb("text/html", "/spiffs/index.html");
-    // webServer.sendHeader("Connection", "close");
-    // webServer.send(200, "text/html", 
-    //  [](String s){
-    //   String readString="";
-    //   fUpdate = fopen("/spiffs/index.html", "r");
-    //   if(fUpdate==NULL)return String("Please upload index.html");
-    //   char line[64];
-    //   while (fgets(line, sizeof(line), fUpdate ))
-    //   {
-    //     readString +=  line;
-    //   }
-    //   fclose(fUpdate);
-    //   return readString;
-    //   }(loginIndex)   
-    // ); 
-    });
+               { readFileToWeb("text/html", "/spiffs/index.html"); });
+  // webServer.sendHeader("Connection", "close");
+  // webServer.send(200, "text/html",
+  //  [](String s){
+  //   String readString="";
+  //   fUpdate = fopen("/spiffs/index.html", "r");
+  //   if(fUpdate==NULL)return String("Please upload index.html");
+  //   char line[64];
+  //   while (fgets(line, sizeof(line), fUpdate ))
+  //   {
+  //     readString +=  line;
+  //   }
+  //   fclose(fUpdate);
+  //   return readString;
+  //   }(loginIndex)
+  // );
 
   // jquery_min_js
   webServer.on("/jquery.min.js", HTTP_GET, []()
@@ -1687,6 +1733,8 @@ void serverOnset()
                {
     webServer.sendHeader("Connection", "close");
     webServer.send(200, "text/html", fileUpload); });
+  webServer.on("/fileUpload.html", HTTP_GET, []()
+               { readFileToWeb("text/html", "/spiffs/fileUpload.html"); });
 
   webServer.on("/serverIndex", HTTP_GET, []()
                {
@@ -1698,16 +1746,12 @@ void serverOnset()
       {
     webServer.sendHeader("Connection", "close");
     webServer.send(200, "text/plain", /*(update.haserror()) ? "fail" :*/ "OK");
-    printf("Finish"); },
+    Client.printf("Finish"); },
       []()
       {
         HTTPUpload &upload = webServer.upload();
         if (upload.status == UPLOAD_FILE_START)
         {
-          if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-          { // start with max available size
-            Update.printError(Serial);
-          }
           upload.filename = String("/spiffs/") + upload.filename;
           fUpdate = fopen(upload.filename.c_str(), "w+");
           UpdateSize = 0;
@@ -1716,16 +1760,16 @@ void serverOnset()
         {
           fwrite((char *)upload.buf, upload.currentSize, 1, fUpdate);
           UpdateSize += upload.currentSize;
-          printf(".");
+          Client.printf("%d\r\n", upload.currentSize);
         }
         else if (upload.status == UPLOAD_FILE_END)
         {
           fclose(fUpdate);
-          printf("Update END....File name : %s\r\n", upload.filename.c_str());
-          printf("name : %s\r\n", upload.name.c_str());
-          printf("type: %s\r\n", upload.type.c_str());
-          printf("size: %d\r\n", upload.totalSize);
-          Update.end(false);
+          Client.printf("Upload END....File name : %s\r\n", upload.filename.c_str());
+          Client.printf("name : %s\r\n", upload.name.c_str());
+          Client.printf("type: %s\r\n", upload.type.c_str());
+          Client.printf("size: %d\r\n", upload.totalSize);
+          // Update.end(false);
         }
       });
   webServer.on(
@@ -1902,13 +1946,14 @@ int telnet_write(const char *format, va_list ap)
 // }
 void telnetServerCheckClient()
 {
-  if (!ETH.linkUp())
-  {
-    Serial.println("EthernetServer not connected! Retrying ...");
-    if (Client)
-      Client.stop();
-    return;
-  }
+  // if (!ETH.linkUp())
+  // {
+  //   //Serial.println("EthernetServer not connected! Retrying ...");
+  //   //vTaskDelay(1000);
+  //   if (Client)
+  //     Client.stop();
+  //   return;
+  // }
   if (telnetServer.hasClient())
   { // check if there are any new clients
     Client = telnetServer.available();
@@ -1935,7 +1980,6 @@ void readnWriteEEProm()
   {
     if (Client.connected())
       Client.printf("\n\rInitialize....Ipset memory....to default..");
-    Serial.printf("\n\rInitialize....Ipset memory....to default..");
     EEPROM.writeByte(0, 0x55);
     ipAddress_struct.IPADDRESS = (uint32_t)IPAddress(192, 168, 0, 57);
     ipAddress_struct.GATEWAY = (uint32_t)IPAddress(192, 168, 0, 1);
@@ -1947,11 +1991,27 @@ void readnWriteEEProm()
     ipAddress_struct.NTP_1 = (uint32_t)IPAddress(203, 248, 240, 140); //(203, 248, 240, 140);
     ipAddress_struct.NTP_2 = (uint32_t)IPAddress(13, 209, 84, 50);
     ipAddress_struct.ntpuse = false;
+    ipAddress_struct.BAUDRATE = 9600;
+    ipAddress_struct.Q_INTERVAL = 2000;
 
     EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
     EEPROM.commit();
   }
   EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  if (ipAddress_struct.Q_INTERVAL < 300)
+  {
+    ipAddress_struct.Q_INTERVAL = 2000;
+    EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+    EEPROM.commit();
+    EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  }
+  if (ipAddress_struct.BAUDRATE < 2400)
+  {
+    ipAddress_struct.BAUDRATE = 9600;
+    EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+    EEPROM.commit();
+    EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
+  }
 
   ipaddress = IPAddress(ipAddress_struct.IPADDRESS);
   gateway = IPAddress(ipAddress_struct.GATEWAY);
@@ -2075,8 +2135,9 @@ void setRtc()
 void setup()
 {
   pinMode(33, OUTPUT);
-  // Serial.begin(9600);
-  Serial.begin(115200);
+  readnWriteEEProm();
+  Serial.begin(ipAddress_struct.BAUDRATE);
+  // Serial.begin(115200);
   EEPROM.begin(100);
   setRtc();
 
@@ -2097,7 +2158,7 @@ void setup()
   printf("\r\nWiFi.softAP(soft_ap_ssid, soft_ap_password)");
   WiFi.softAP(soft_ap_ssid, soft_ap_password);
   printf("\r\nlittleFsInit");
-  littleFsInit();
+  littleFsInit(0);
   printf("\r\nreadnWriteEEProm");
   readnWriteEEProm();
   printf("\r\nEthLan8720Start");
@@ -2166,12 +2227,12 @@ void loop()
   delay(1);
 }
 
-  //webServer.sendHeader("Connection", "close");
+// webServer.sendHeader("Connection", "close");
 
-  // char *chp = (char *)heap_caps_malloc(st.st_size + 1, MALLOC_CAP_8BIT);
-    // webServer.send(200, content_type, chp,nRead);
-    // Client.printf("file read %d\r\n", nRead);
-    // chp[readCount] = 0x00;
+// char *chp = (char *)heap_caps_malloc(st.st_size + 1, MALLOC_CAP_8BIT);
+// webServer.send(200, content_type, chp,nRead);
+// Client.printf("file read %d\r\n", nRead);
+// chp[readCount] = 0x00;
 void readFileToWeb(const char *content_type, const char *filename)
 {
   struct stat st;
@@ -2230,18 +2291,18 @@ void readFileToWeb(const char *content_type, const char *filename)
   Client.printf("finished send file\r\n");
 }
 
-  // while ((ch = fgetc(fUpdate)) != EOF)
-  // while (!fUpdate.feof())
-  // {
-  //   {
-  //     int bytesRead = fUpdat.readBytes(chp, sizeof(chp));
-  //     // chp[readCount++] = ch;
-  //   };
-  //   // chp[readCount] = 0x00;
-  //   webServer.send(200, content_type, chp);
-  //   fclose(fUpdate);
-  //   free(chp);
-  // }
+// while ((ch = fgetc(fUpdate)) != EOF)
+// while (!fUpdate.feof())
+// {
+//   {
+//     int bytesRead = fUpdat.readBytes(chp, sizeof(chp));
+//     // chp[readCount++] = ch;
+//   };
+//   // chp[readCount] = 0x00;
+//   webServer.send(200, content_type, chp);
+//   fclose(fUpdate);
+//   free(chp);
+// }
 // {
 //   // FILE *file = fopen("/spiffs/eventLog.json", "r");
 //   ifstream fin;

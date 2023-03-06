@@ -669,8 +669,7 @@ class drawDiagram {
 //         }
 // )
 class modBusDataClass {
-    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) 
-    {
+    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) {
         this.wireColor = '#3d8021';
 
         this.justOnlyEvent = justOnlyEvent;
@@ -1296,6 +1295,12 @@ function setWebSocketOnEvent(webSocket) {
                 }
                 else if (data.command_type == 'pong') {
                     console.log(`get pong net work alive`)
+                    console.log(data)
+                    if (data.modbusStatus === 224) {
+                        console.log(`modbus comm error`)
+                        statusBar.style = "color: red;20px"
+                        statusBar.innerHTML = `Modbus 통신에러(${modData.mobusStatus})`
+                    }
                 }
                 else if (data.command_type == 'modbus') {
                     winsocksubData.fileHtmlData(data);
@@ -1327,9 +1332,20 @@ function setWebSocketOnEvent(webSocket) {
                     gatewayTxt.value = data.gateway
                     webSocketServerTxt.value = data.websocketserver
                     webSocketPortTxt.value = data.webSocketPort
+                    ntp1Txt.value = data.ntp1
+                    ntp2Txt.value = data.ntp2
                     ntpuseChkbox.checked = data.ntpuse
-
+                    versionLbl.value= data.ver
+                    baudRatetxt.value = data.baudrate;
+                    intervaltxt.value = data.interval;
+                    console.log(data);
                 }
+                else if (data.command_type == 'user') {
+                    console.log(data)
+                    useridtxt.value = data.userid;
+                    passwdtxt.value = data.passwd;
+                }
+
                 else {
                     statusBar.innerHTML = `request command='${data.command_type}' answer received`
                     statusBar.style = "color: blue;"
@@ -1456,7 +1472,6 @@ class winsocksubClass {
         NominalOutput.innerHTML = `${data.value[7]}V`
         madeByCompany.innerHTML = data.value[8] === 4 ? "대농산업전기" : "Unknown"
         installedCells.innerHTML = `${data.value[9]}셀`
-        console.log("---------------------")
     }
     showTime(data) {
         //console.log(`data.time ${data.time}`)
@@ -1584,6 +1599,19 @@ document.getElementById('viewN').addEventListener('click', (e) => {
     document.getElementById('HtmlLogView').style.display = 'none';
     document.getElementById('viewBasic').style.display = 'none';
     document.getElementById('sectionNetworkInfo').style.display = 'grid';
+
+    let commandData = `ipaddress`;
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN) {
+        webSocket.send(data);
+    }
+    else console.log("socket was closed");
+
+    commandData = `user `
+    data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN) {
+        webSocket.send(data);
+    }
 });
 //logout
 document.getElementById('logout').addEventListener('click', (e) => {
@@ -1604,6 +1632,7 @@ document.getElementById('useridbtn').addEventListener('click', (e) => {
         else console.log("socket was closed");
     }
 });
+
 document.getElementById('passwdbtn').addEventListener('click', (e) => {
     let result = window.confirm("비밀번호를 변경합니다");
     if (result) {
@@ -1619,6 +1648,18 @@ document.getElementById('passwdbtn').addEventListener('click', (e) => {
     }
 });
 
+document.getElementById('rebootBtn').addEventListener('click', (e) => {
+    let result = window.confirm("시스템을 재 부팅합니다. 1분후에 재 접속해 주세요.");
+    if (result) {
+        let commandData = `reboot `
+        let data = JSON.stringify({ 'command_type': commandData });
+        if (webSocket.readyState === webSocket.OPEN) {
+            sendString = data;
+            webSocket.send(data);
+        }
+        else console.log("socket was closed");
+    }
+});
 
 function downloadCSV(tableId) {
     let table = document.getElementById(tableId);
@@ -1773,6 +1814,29 @@ document.getElementById('socketportBtn').addEventListener('click', (e) => {
     }
     else console.log("socket was closed");
 });
+document.getElementById('baudRateBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('baudRatetxt')
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -baudrate ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
+        webSocket.send(data);
+    }
+    else console.log("socket was closed");
+});
+document.getElementById('intervalBtn').addEventListener('click', (e) => {
+    let text = document.getElementById('intervaltxt')
+    let ipaddresss = text.value;
+    let commandData = `ipaddress -s -interval ${ipaddresss}`
+    let data = JSON.stringify({ 'command_type': commandData });
+    if (webSocket.readyState === webSocket.OPEN) {
+        sendString = data;
+        webSocket.send(data);
+    }
+    else console.log("socket was closed");
+});
+
 document.getElementById('ntpuseBtn').addEventListener('click', (e) => {
     let text = document.getElementById('ntpuseChkbox')
     let checked = text.checked ? 1 : 0;
@@ -1832,7 +1896,7 @@ window.onload = function () {
         document.getElementById('viewBasic').style.display = 'none';//'grid';
         //document.getElementById('testRoutine').style.display = 'none';
         //document.getElementById('testRoutine').style.display = 'none';
-        document.getElementById('sectionNetworkInfo').style.display ='none';// 'grid';//
+        document.getElementById('sectionNetworkInfo').style.display = 'none';// 'grid';//
         testClassCode();
     }
     else {

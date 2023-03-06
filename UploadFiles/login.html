@@ -17,7 +17,12 @@
         <input type="button" class="btn" id="loginBtn" click="formLogin" value="로그인" />
     </div>
     <script defer>
-        const webSocket = new WebSocket('ws://' + '192.168.0.57' + ':81/');
+        var connectUrl = document.location.hostname;//"192.168.0.57"
+        if (document.location.hostname.includes("127.0.0")) {
+            connectUrl = "192.168.0.57";// 
+        }
+        const webSocket = new WebSocket('ws://' + connectUrl + ':81/');
+        //alert(`connect to ${connectUrl}`)
         var users = {
             user1: 'passwd1',
         };

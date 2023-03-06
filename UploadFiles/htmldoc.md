@@ -62,3 +62,23 @@
     system reboot immediatly  
     - usage:   
      reboot   
+
+### Upload File List  
+  ---
+ 
+  ```
+  alert.svg  10732  
+  bell-ringing.mp3  99238  
+  favicon.ico  5430  
+  fileUpload.html  3196  
+  help.html  296  
+  index.html  27628  
+  index.js  80649  
+  index.css  6702  
+  logFile.dat  620  
+  login.css  814  
+  svg.min.js  159263  
+  svg.min.js.map  533342  
+  serverIndex.html  2846  
+  style.css  860  
+  ```

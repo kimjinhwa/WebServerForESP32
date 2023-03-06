@@ -1830,7 +1830,7 @@ window.onload = function () {
         document.getElementById('HtmlLogView').style.display = 'none';
         //document.getElementById('HtmlLogView').style.display = 'none';
         document.getElementById('viewBasic').style.display = 'none';//'grid';
-        //document.getElementById('testRoutine').style.display = 'none';
+        document.getElementById('testRoutine').style.display = 'grid';
         //document.getElementById('testRoutine').style.display = 'none';
         document.getElementById('sectionNetworkInfo').style.display ='none';// 'grid';//
         testClassCode();
