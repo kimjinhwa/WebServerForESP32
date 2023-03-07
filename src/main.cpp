@@ -40,7 +40,7 @@
 // #define MAX_SOCK_NUM 12 cunstom ethernet.h ->8 to 12
 
 #define USE_SERIAL Serial
-const char *ver = "1.0.2";
+const char *ver = "1.0.3";
 
 struct UserInfo_s
 {
@@ -62,8 +62,8 @@ StaticJsonDocument<2000> doc_tx;
 // StaticJsonDocument<2000> doc_rx;
 TaskHandle_t *h_pxModbus;
 /* setup function */
-const char *soft_ap_ssid = "CHA_IFT";
-const char *soft_ap_password = "iftech";
+const char *soft_ap_ssid = "CHAGER_IFT";
+const char *soft_ap_password = "87654321";
 static int webRequestNo = -1;
 
 SimpleCLI cli;
@@ -88,6 +88,7 @@ void WritHoldeRegister(int address, int len);
 int logCount();
 int clientReadTimeout(int timeout);
 void readFileToWeb(const char *content_type, const char *filename);
+void setRtc();
 // EthernetClient Client;
 WiFiClient Client;
 // EthernetServer telnetServer(23);
@@ -106,7 +107,7 @@ uint16_t webSocketPort = 81;
 QueueHandle_t h_queue;
 QueueHandle_t h_sendSocketQueue;
 
-void EthLan8720Start();
+int EthLan8720Start();
 void readInputSerial();
 void writeHellowTofile();
 void littleFsInit(int bformat);
@@ -515,8 +516,26 @@ void printLocalTime()
 }
 void getNtpTime()
 {
+
+  RtcDateTime now_rtc = Rtc.GetDateTime();
+  printDateTime(now_rtc);
   configTime(gmtOffset_sec, daylightOffset_sec, ntp_1.toString().c_str(), ntp_2.toString().c_str());
-  printLocalTime();
+  time_t now = time(nullptr);
+  if (now > 1100000000)
+  {
+    struct timeval tmv;
+    tmv.tv_sec = now;
+    tmv.tv_usec = 0;
+    //settimeofday(&tmv, NULL); // 웹에서 PC시간으로 설정을 한다.
+    Client.printf("Ntp Time Get succeed %ld\r\n", now);
+    printLocalTime();
+  }
+  else
+  {
+    setRtc();
+    Client.printf("Ntp Time Get succeed failed.\r\n");
+    printLocalTime();
+  }
 }
 void log_configCallback(cmd *cmdPtr)
 {
@@ -556,9 +575,7 @@ void time_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   doc_tx["command_type"] = cmd.getName(); // + String(chp);
   bool if_modified = false;
-  printLocalTime();
-  RtcDateTime now = Rtc.GetDateTime();
-  printDateTime(now);
+  getNtpTime();
 
   EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
   String strValue;
@@ -638,22 +655,22 @@ void ntptime_configCallback(cmd *cmdPtr)
   configTime(0, 0, ntp_1.toString().c_str(), ntp_2.toString().c_str());
   // Wait for time to be set, or use RTC time if NTP server is not available
   time_t now = time(nullptr);
-  while (now < 100000)
+  // while (now < 1100000000)
   {
     delay(1000);
     now = time(nullptr);
     Client.printf("\n\rRTC time set to system time %ld", now);
-    if (now < 100000)
+    if (now < 1100000000)
     {
       // Use RTC time if NTP server is not available and RTC is write-protected
       struct timeval tv;
       gettimeofday(&tv, nullptr);
       // rtc.SetDateTime(tv.tv_sec);
       Client.println("\n\rRTC time set to system time");
-      break;
+      // break;
     }
   }
-  if (now >= 100000)
+  if (now >= 1100000000)
   {
     // Set the RTC time to the system time
     // rtc.SetDateTime(now);
@@ -1247,12 +1264,12 @@ void setIpaddressToEthernet()
   else
     printf("Eth config succeed...\r\n");
 }
-void EthLan8720Start()
+int EthLan8720Start()
 {
   // WiFi.onEvent(WiFiEvent);
   pinMode(ETH_POWER_PIN, OUTPUT);
   ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO0_IN /*ETH_CLK_MODE*/);
-  int retrycount = 10;
+  int retrycount = 0;
   // digitalWrite(ETH_POWER_PIN,LOW);
 
   if (ETH.config(ipaddress, gateway, subnetmask, dns1, dns2) == false)
@@ -1263,8 +1280,10 @@ void EthLan8720Start()
   {
     printf("\r\nconnecting...");
     delay(1000);
-    if (retrycount--)
-      return;
+    if (retrycount++ >= 10)
+    {
+      return -1;
+    }
   }
   printf("\r\nConnected\r\n");
   telnetServer.begin();
@@ -1272,6 +1291,7 @@ void EthLan8720Start()
   printf("\r\nReady! Use 'telnet ");
   printf(ETH.localIP().toString().c_str());
   printf(" 23' to connect");
+  return 0;
 }
 void littleFsInit(int bformat)
 {
@@ -1412,7 +1432,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         }
         else
         {
-          Serial.println("Error occured..");
+          printf("Error occured..\r\n");
         }
       }
       fclose(fp);
@@ -2090,43 +2110,43 @@ void setRtc()
 
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
   printDateTime(compiled);
-  Serial.println();
+  printf("\r\n");
   if (!Rtc.IsDateTimeValid())
   {
     // Common Causes:
     //    1) first time you ran and the device wasn't running yet
     //    2) the battery on the device is low or even missing
 
-    Serial.println("RTC lost confidence in the DateTime!");
+    printf("RTC lost confidence in the DateTime!\r\n");
     // Rtc.SetDateTime(compiled);
   }
   if (Rtc.GetIsWriteProtected())
   {
-    Serial.println("RTC was write protected, enabling writing now");
+    printf("RTC was write protected, enabling writing now\r\n");
     Rtc.SetIsWriteProtected(false);
   }
   if (!Rtc.GetIsRunning())
   {
-    Serial.println("RTC was not actively running, starting now");
+    printf("RTC was not actively running, starting now\r\n");
     Rtc.SetIsRunning(true);
   }
 
   RtcDateTime now = Rtc.GetDateTime();
   if (now < compiled)
   {
-    Serial.println("RTC is older than compile time!  (Updating DateTime)");
+    printf("RTC is older than compile time!  (Updating DateTime)\r\n");
     Rtc.SetDateTime(compiled);
   }
   else if (now > compiled)
   {
-    Serial.println("RTC is newer than compile time. (this is expected)");
+    printf("RTC is newer than compile time. (this is expected)\r\n");
   }
   else if (now == compiled)
   {
-    Serial.println("RTC is the same as compile time! (not expected but all is fine)");
+    printf("RTC is the same as compile time! (not expected but all is fine)\r\n");
   }
   printDateTime(now);
-  Serial.println();
+  printf("\r\n");
   struct timeval tmv;
   tmv.tv_sec = now.Epoch32Time();
   tmv.tv_usec = 0;
@@ -2134,6 +2154,7 @@ void setRtc()
 }
 void setup()
 {
+  int isEthernetConnect = false;
   pinMode(33, OUTPUT);
   readnWriteEEProm();
   Serial.begin(ipAddress_struct.BAUDRATE);
@@ -2152,18 +2173,24 @@ void setup()
     printf("\r\nFailed to create queue= %p\n", h_queue);
   }
 
-  WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
-  printf("\r\nWiFi.mode(WIFI_MODE_AP)");
-  WiFi.mode(WIFI_MODE_AP);
-  printf("\r\nWiFi.softAP(soft_ap_ssid, soft_ap_password)");
-  WiFi.softAP(soft_ap_ssid, soft_ap_password);
   printf("\r\nlittleFsInit");
   littleFsInit(0);
   printf("\r\nreadnWriteEEProm");
   readnWriteEEProm();
   printf("\r\nEthLan8720Start");
-  EthLan8720Start();
-  printf("\r\nWiFi.softAPConfig");
+  if (EthLan8720Start())
+  {
+    printf("\r\nWiFi.softAPConfig");
+    WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
+    printf("\r\nWiFi.mode(WIFI_MODE_AP)");
+    WiFi.mode(WIFI_MODE_AP);
+    printf("\r\nWiFi.softAP(soft_ap_ssid, soft_ap_password)");
+    WiFi.softAP(soft_ap_ssid, soft_ap_password);
+  }
+  else
+  {
+    printf("\r\nEthernet connection succeed");
+  }
 
   printf("\r\nmDNS responder started");
   serverOnset();
@@ -2193,6 +2220,7 @@ void setup()
 
 unsigned long previousmills = 0;
 int interval = 2000;
+int loopCount = 0;
 void loop()
 {
   // esp_log_level_set(TAG, ESP_LOG_DEBUG);
@@ -2219,10 +2247,16 @@ void loop()
   {
     time(&nowTime);
     doc_tx["command_type"] = "nowtime";
-    doc_tx["time"] = nowTime - gmtOffset_sec;
+    doc_tx["time"] = nowTime ;//- gmtOffset_sec;
     serializeJson(doc_tx, sendString);
     webSocket.broadcastTXT(sendString);
     previousmills = now;
+    if (loopCount == 0 && ipAddress_struct.ntpuse)
+    {
+      getNtpTime();
+      loopCount = 0;
+    }
+    loopCount++;
   }
   delay(1);
 }

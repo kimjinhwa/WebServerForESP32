@@ -1475,7 +1475,7 @@ class winsocksubClass {
     }
     showTime(data) {
         //console.log(`data.time ${data.time}`)
-        let nowTime = new Date(data.time * 1000);
+        let nowTime = new Date((data.time - 9 * 3600) * 1000);
         drawdiag.drawTime.text(nowTime.toLocaleString());
     }
 }

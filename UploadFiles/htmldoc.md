@@ -82,3 +82,6 @@
   serverIndex.html  2846  
   style.css  860  
   ```
+  대기시간 --- 1분
+  const char *soft_ap_ssid = "CHAGER_IFT";
++const char *soft_ap_password = "87654321";
