@@ -40,7 +40,7 @@
 // #define MAX_SOCK_NUM 12 cunstom ethernet.h ->8 to 12
 
 #define USE_SERIAL Serial
-const char* ver="1.0.1";
+const char *ver = "1.0.2";
 
 struct UserInfo_s
 {
@@ -63,7 +63,7 @@ StaticJsonDocument<2000> doc_tx;
 TaskHandle_t *h_pxModbus;
 /* setup function */
 const char *soft_ap_ssid = "CHA_IFT";
-const char *soft_ap_password = "iftech0273";
+const char *soft_ap_password = "iftech";
 static int webRequestNo = -1;
 
 SimpleCLI cli;
@@ -880,8 +880,8 @@ void ip_configCallback(cmd *cmdPtr)
     Client.printf("\r\nNTP_2 %s", ntp_2.toString().c_str());
     Client.printf("\r\nwebsocketserver %s", websocketserver.toString().c_str());
     Client.printf("\r\nwebSocketPort %d\r\n", webSocketPort);
-    Client.printf("\r\nbaudrate %d\r\n",ipAddress_struct.BAUDRATE );
-    Client.printf("\r\ninterval %d\r\n",ipAddress_struct.Q_INTERVAL);
+    Client.printf("\r\nbaudrate %d\r\n", ipAddress_struct.BAUDRATE);
+    Client.printf("\r\ninterval %d\r\n", ipAddress_struct.Q_INTERVAL);
     Client.printf("\r\nver %s", ver);
 
     doc_tx["ipaddress"] = ipaddress.toString();

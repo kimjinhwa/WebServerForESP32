@@ -397,3 +397,7 @@ th {
     background-color: bisque;
     display: none;
 }
+#dialog
+{
+  background-color: rgb(238, 226, 235);
+}

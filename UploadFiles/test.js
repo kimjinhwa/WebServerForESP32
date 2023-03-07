@@ -669,8 +669,7 @@ class drawDiagram {
 //         }
 // )
 class modBusDataClass {
-    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) 
-    {
+    constructor(dataArrayBuffer, justOnlyEvent, alarmEvent, modBusDataArray) {
         this.wireColor = '#3d8021';
 
         this.justOnlyEvent = justOnlyEvent;
@@ -1328,6 +1327,9 @@ function setWebSocketOnEvent(webSocket) {
                     webSocketServerTxt.value = data.websocketserver
                     webSocketPortTxt.value = data.webSocketPort
                     ntpuseChkbox.checked = data.ntpuse
+                    // versionLbl.value = data.ver
+                    // baudRatetxt.value = data.baudrate;
+                    // intervaltxt.value = data.interval;
 
                 }
                 else {
@@ -1619,6 +1621,18 @@ document.getElementById('passwdbtn').addEventListener('click', (e) => {
     }
 });
 
+document.getElementById('rebootBtn').addEventListener('click', (e) => {
+    let result = window.confirm("시스템을 재 부팅합니다. 1분후에 재 접속해 주세요.");
+    if (result) {
+        let commandData = `reboot `
+        let data = JSON.stringify({ 'command_type': commandData });
+        if (webSocket.readyState === webSocket.OPEN) {
+            sendString = data;
+            webSocket.send(data);
+        }
+        else console.log("socket was closed");
+    }
+});
 
 function downloadCSV(tableId) {
     let table = document.getElementById(tableId);
@@ -1799,6 +1813,23 @@ document.getElementById('firmWareUpload').addEventListener('click', (e) => {
 document.getElementById('fileUpload').addEventListener('click', (e) => {
     document.location = "fileUpload";
 })
+document.getElementById('btnTest').addEventListener('click', (e) => {
+    let data;
+    let reg, set;
+    let splitdata = (commandText.value).split(",");
+    if(splitdata.length == 2 ){
+        reg = splitdata[0];
+        set = splitdata[1];
+        if(reg<60){
+            data = JSON.stringify({ 'command_type': 'ModBusSet', 'reg': reg, 'set': set}); /* BIT 15 =0 열림*/
+            sendString = data;
+            alert(data)
+            webSocket.send(data);
+        }
+    }
+
+
+})
 
 
 addEventArray(); //배포본에는 사용되지 않을 펑션이다.
@@ -1832,8 +1863,10 @@ window.onload = function () {
         document.getElementById('viewBasic').style.display = 'none';//'grid';
         document.getElementById('testRoutine').style.display = 'grid';
         //document.getElementById('testRoutine').style.display = 'none';
-        document.getElementById('sectionNetworkInfo').style.display ='none';// 'grid';//
+        document.getElementById('sectionNetworkInfo').style.display = 'none';// 'grid';//
         testClassCode();
+        fireAlarmStatus(true);
+        fireAlarmStatus(false);
     }
     else {
         window.location.href = "login.html";

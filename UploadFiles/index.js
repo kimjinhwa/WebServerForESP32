@@ -1264,7 +1264,7 @@ function setWebSocketOnEvent(webSocket) {
         retryCount = 0
     })
     webSocket.addEventListener('error', (event) => {
-        console.log("WebSocket error:", error);
+        console.log("WebSocket error:", event);
     })
 
     // webSocket.addEventListener('close', (event) => {
@@ -1335,7 +1335,7 @@ function setWebSocketOnEvent(webSocket) {
                     ntp1Txt.value = data.ntp1
                     ntp2Txt.value = data.ntp2
                     ntpuseChkbox.checked = data.ntpuse
-                    versionLbl.value= data.ver
+                    versionLbl.value = data.ver
                     baudRatetxt.value = data.baudrate;
                     intervaltxt.value = data.interval;
                     console.log(data);
@@ -1898,6 +1898,8 @@ window.onload = function () {
         //document.getElementById('testRoutine').style.display = 'none';
         document.getElementById('sectionNetworkInfo').style.display = 'none';// 'grid';//
         testClassCode();
+        fireAlarmStatus(true);
+        fireAlarmStatus(false);
     }
     else {
         window.location.href = "login.html";

@@ -15,7 +15,7 @@
 #define NUM_VALUES 60
 #define READ_INTERVAL 5000
 uint8_t data_ready = 0;
-int modbusErrorCode=0 ;
+int modbusErrorCode = 0;
 
 uint32_t request_time;
 ModbusClientRTU MB(Serial);
@@ -24,11 +24,15 @@ static char TAG[] = "MODBUS";
 int telnet_write(const char *format, va_list ap);
 
 extern modBusData_t modBusData;
-extern  nvsSystemSet ipAddress_struct;
+modBusData_t before_modBusData;
+extern nvsSystemSet ipAddress_struct;
 extern QueueHandle_t h_queue;
 extern QueueHandle_t h_sendSocketQueue;
 extern WiFiClient Client;
 extern SemaphoreHandle_t xMutex;
+void backupModebusData();
+bool isModebusDataChanged();
+boolean dataChanged = false;
 
 const int16_t char_12_AlarmMask = 0x00 | BIT(0) | BIT(3) | BIT(4) | BIT(5) | BIT(6) | BIT(8) | BIT(9) | BIT(10) | BIT(11) | BIT(12) | BIT(13) | BIT(14);
 const int16_t char_13_AlarmMask = 0x00 | BIT(0) | BIT(1) | BIT(5) | BIT(6) | BIT(8);
@@ -59,6 +63,26 @@ struct structEvent oldEvent; // = {00,00,00,00, 00};
 1	1213	bt: 1	충전기 S상 GDU 이상
 1	1214	bt: 1	충전기 T상 GDU 이상
 */
+void backupModebusData()
+{
+    before_modBusData.logTime = modBusData.logTime;
+    for (int i = 0; i < 60; i++)
+    {
+        before_modBusData.Data[i] = modBusData.Data[i];
+    }
+}
+bool isModebusDataChanged()
+{
+    for (int i = 0; i < 60; i++)
+    {
+        if (before_modBusData.Data[i] != modBusData.Data[i])
+        {
+            // Client.println("data Changed");
+            return true;
+        }
+    }
+    return false;
+}
 void logwrite_event()
 {
     time_t nowTime;
@@ -79,7 +103,9 @@ void log_status_change()
     int16_t changed_bits_13 = oldEvent.char_13 ^ modBusData.Data[13];
     int16_t changed_bits_14 = oldEvent.char_14 ^ modBusData.Data[14];
     int16_t changed_bits_15 = oldEvent.char_15 ^ modBusData.Data[15];
-    if(changed_bits_12 || changed_bits_13 || changed_bits_14 || changed_bits_15 ){
+    dataChanged = isModebusDataChanged();
+    if (changed_bits_12 || changed_bits_13 || changed_bits_14 || changed_bits_15)
+    {
         logwrite_event();
     };
     // if(char_12_AlarmMask & changed_bits_12 ) //if changed bit is for alarm
@@ -94,12 +120,13 @@ void log_status_change()
     oldEvent.char_13 = modBusData.Data[13];
     oldEvent.char_14 = modBusData.Data[14];
     oldEvent.char_15 = modBusData.Data[15];
+    backupModebusData();
 }
 
 void handleData(ModbusMessage response, uint32_t token)
 {
     // First value is on pos 3, after server ID, function code and length byte
-    modbusErrorCode =0;
+    modbusErrorCode = 0;
     response.get(1, data_ready); // function code
     uint16_t offs = 3;
     // if (Client.connected())
@@ -116,10 +143,6 @@ void handleData(ModbusMessage response, uint32_t token)
         }
         xSemaphoreGive(xMutex);
         log_status_change();
-        // oldEvent.char_12 = modBusData.Data[12];
-        // oldEvent.char_13 = modBusData.Data[13];
-        // oldEvent.char_14 = modBusData.Data[14];
-        // oldEvent.char_15 = modBusData.Data[15];
     }
 
     if (data_ready == WRITE_HOLD_REGISTER)
@@ -138,11 +161,11 @@ void handleError(Error error, uint32_t token)
     ModbusError me(error);
     if (Client.connected())
         Client.printf("Error response: %02X - %s\r\n", (int)me, (const char *)me);
-        {
-           modbusErrorCode =  (int)me;
-        }
+    {
+        modbusErrorCode = (int)me;
+    }
     //  printf("Error response: %02X - %s\n", (int)me, (const char *)me);
-    //ESP_LOGE(TAG, "Error response: %02X - %s\n", (int)me, (const char *)me);
+    // ESP_LOGE(TAG, "Error response: %02X - %s\n", (int)me, (const char *)me);
 }
 void modBusRtuSetup()
 {
@@ -152,9 +175,10 @@ void modBusRtuSetup()
     MB.setTimeout(2000);
     MB.begin(Serial);
 }
-void WritHoldeRegister(int address,int len ){
-   Error err = MB.addRequest((uint32_t)millis(), 1, WRITE_HOLD_REGISTER, address, len);
-} 
+void WritHoldeRegister(int address, int len)
+{
+    Error err = MB.addRequest((uint32_t)millis(), 1, WRITE_HOLD_REGISTER, address, len);
+}
 void modbusRequest(void *parameter)
 {
     // Issue the request
@@ -165,16 +189,28 @@ void modbusRequest(void *parameter)
     int16_t rQuest[5];
 
     unsigned long previousmills = 0;
+    unsigned long everypreviousmills = 0;
     int interval = 2000;
-    interval = ipAddress_struct.Q_INTERVAL < 300? 300: ipAddress_struct.Q_INTERVAL;
+    int everySecondInterval = 1000;
+    interval = ipAddress_struct.Q_INTERVAL < 300 ? 300 : ipAddress_struct.Q_INTERVAL;
     // time_t nowTime;
     unsigned long now;
     esp_log_set_vprintf(telnet_write);
-    // oldEvent = {00,00,00,00, 00};
     while (1)
     {
         now = millis();
-        interval = ipAddress_struct.Q_INTERVAL < 300? 300: ipAddress_struct.Q_INTERVAL;
+        interval = ipAddress_struct.Q_INTERVAL < 300 ? 300 : ipAddress_struct.Q_INTERVAL;
+        if ((now - everypreviousmills > everySecondInterval) || dataChanged)
+        {
+            int16_t qSocketSendRequest[5];
+            memset(qSocketSendRequest, 0x00, 5);
+            qSocketSendRequest[0] = 0x06;
+            qSocketSendRequest[1] = FIRST_REGISTER;
+            qSocketSendRequest[2] = NUM_VALUES;
+            xQueueSend(h_sendSocketQueue, &qSocketSendRequest, (TickType_t)0);
+            dataChanged = false;
+            everypreviousmills = now;
+        }
         if (now - previousmills > interval)
         {
             data_ready = 0;
@@ -186,20 +222,13 @@ void modbusRequest(void *parameter)
             // time(&nowTime);
             previousmills = now;
             digitalWrite(33, LEDSTATUS = !LEDSTATUS);
-
-            int16_t qSocketSendRequest[5];
-            memset(qSocketSendRequest, 0x00, 5);
-            qSocketSendRequest[0] = 0x06;
-            qSocketSendRequest[1] = FIRST_REGISTER;
-            qSocketSendRequest[2] = NUM_VALUES;
-            xQueueSend(h_sendSocketQueue, &qSocketSendRequest, (TickType_t)0);
         };
         if (xQueueReceive(h_queue, &rQuest, (TickType_t)5))
         {
             data_ready = 0;
             Error err = MB.addRequest((uint32_t)millis(), 1, WRITE_HOLD_REGISTER, rQuest[1], rQuest[2]);
             // vTaskDelay(100);
-            //err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
+            // err = MB.addRequest((uint32_t)millis(), 1, READ_INPUT_REGISTER, FIRST_REGISTER, NUM_VALUES);
         }
     }
 }
