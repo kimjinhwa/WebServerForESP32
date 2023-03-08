@@ -15,6 +15,7 @@
 
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
+#include <BluetoothSerial.h>
 
 // for file system
 #include <esp_spiffs.h>
@@ -37,10 +38,15 @@
 #define ETH_MDC_PIN 23
 #define ETH_MDIO_PIN 18
 
+#define BLUETOOTH 0x02
+#define NONE 0x00
 // #define MAX_SOCK_NUM 12 cunstom ethernet.h ->8 to 12
 
 #define USE_SERIAL Serial
+BluetoothSerial SerialBT;
 const char *ver = "1.0.3";
+const String PASSWORD = "87654321";
+uint8_t setOutputDirection = 0;
 
 struct UserInfo_s
 {
@@ -62,7 +68,7 @@ StaticJsonDocument<2000> doc_tx;
 // StaticJsonDocument<2000> doc_rx;
 TaskHandle_t *h_pxModbus;
 /* setup function */
-const char *soft_ap_ssid = "CHAGER_IFT";
+const char *soft_ap_ssid = "CHAGER_";
 const char *soft_ap_password = "87654321";
 static int webRequestNo = -1;
 
@@ -89,6 +95,7 @@ int logCount();
 int clientReadTimeout(int timeout);
 void readFileToWeb(const char *content_type, const char *filename);
 void setRtc();
+void selectPrintf(const char *format, ...);
 // EthernetClient Client;
 WiFiClient Client;
 // EthernetServer telnetServer(23);
@@ -108,7 +115,7 @@ QueueHandle_t h_queue;
 QueueHandle_t h_sendSocketQueue;
 
 int EthLan8720Start();
-void readInputSerial();
+void readInputSerialBT();
 void writeHellowTofile();
 void littleFsInit(int bformat);
 void SimpleCLISetUp();
@@ -125,18 +132,18 @@ String sendString = "";
 #define FNM_CASEFOLD 0x10    // Case insensitive search.
 #define FNM_PREFIX_DIRS 0x20 // Directory prefixes of pattern match too.
 #define EOS '\0'
-int myClientPrintf(const char *format, ...)
-{
-  if (!Client.connected())
-  {
-    return 0;
-  }
-  va_list vl;
-  va_start(vl, format);
-  auto ret = Client.printf(format, vl);
-  va_end(vl);
-  return ret;
-}
+// int myClientPrintf(const char *format, ...)
+// {
+//   if (!Client.connected())
+//   {
+//     return 0;
+//   }
+//   va_list vl;
+//   va_start(vl, format);
+//   auto ret = selectPrintf(format, vl);
+//   va_end(vl);
+//   return ret;
+// }
 //-----------------------------------------------------------------------
 static const char *rangematch(const char *pattern, char test, int flags)
 {
@@ -296,21 +303,21 @@ void listDir(const char *path, char *match)
   struct tm *tm_info;
   char *lpath = NULL;
   int statok;
-  Client.printf("\r\nList of Directory [%s]\r\n", path);
-  Client.printf("-----------------------------------\r\n");
+  selectPrintf("\r\nList of Directory [%s]\r\n", path);
+  selectPrintf("-----------------------------------\r\n");
   // Open directory
   dir = opendir(path);
   if (!dir)
   {
-    Client.printf("Error opening directory\r\n");
+    selectPrintf("Error opening directory\r\n");
     return;
   }
 
   // Read directory entries
   uint64_t total = 0;
   int nfiles = 0;
-  Client.printf("T  Size      Date/Time         Name\r\n");
-  Client.printf("-----------------------------------\r\n");
+  selectPrintf("T  Size      Date/Time         Name\r\n");
+  selectPrintf("-----------------------------------\r\n");
   while ((ent = readdir(dir)) != NULL)
   {
     sprintf(tpath, path);
@@ -355,25 +362,25 @@ void listDir(const char *path, char *match)
         strcpy(size, "       -");
       }
 
-      Client.printf("%c  %s  %s  %s\r\n",
-                    type,
-                    size,
-                    tbuffer,
-                    ent->d_name);
+      selectPrintf("%c  %s  %s  %s\r\n",
+                   type,
+                   size,
+                   tbuffer,
+                   ent->d_name);
     }
   }
   if (total)
   {
-    Client.printf("-----------------------------------\r\n");
+    selectPrintf("-----------------------------------\r\n");
     if (total < (1024 * 1024))
-      Client.printf("   %8d", (int)total);
+      selectPrintf("   %8d", (int)total);
     else if ((total / 1024) < (1024 * 1024))
-      Client.printf("   %6dKB", (int)(total / 1024));
+      selectPrintf("   %6dKB", (int)(total / 1024));
     else
-      Client.printf("   %6dMB", (int)(total / (1024 * 1024)));
-    Client.printf(" in %d file(s)\r\n", nfiles);
+      selectPrintf("   %6dMB", (int)(total / (1024 * 1024)));
+    selectPrintf(" in %d file(s)\r\n", nfiles);
   }
-  Client.printf("-----------------------------------\r\n");
+  selectPrintf("-----------------------------------\r\n");
 
   closedir(dir);
 
@@ -381,8 +388,8 @@ void listDir(const char *path, char *match)
 
   uint32_t tot = 0, used = 0;
   esp_spiffs_info(NULL, &tot, &used);
-  Client.printf("SPIFFS: free %d KB of %d KB\r\n", (tot - used) / 1024, tot / 1024);
-  Client.printf("-----------------------------------\r\n");
+  selectPrintf("SPIFFS: free %d KB of %d KB\r\n", (tot - used) / 1024, tot / 1024);
+  selectPrintf("-----------------------------------\r\n");
 }
 //----------------------------------------------------
 static int file_copy(const char *to, const char *from)
@@ -458,7 +465,7 @@ int clientReadTimeout(int timeout)
       return 'Y';
     else if (c == 'n')
     {
-      Client.printf("\r\nCanceled...");
+      selectPrintf("\r\nCanceled...");
       return 'n';
     }
   }
@@ -468,17 +475,17 @@ void init_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   EEPROM.readBytes(1, (byte *)&ipAddress_struct, sizeof(nvsSystemSet));
   //
-  Client.printf("\r\nipaddress %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString().c_str());
-  Client.printf("gateway %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString().c_str());
-  Client.printf("subnetmask %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString().c_str());
-  Client.printf("dns1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString().c_str());
-  Client.printf("dns2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString().c_str());
-  Client.printf("websocketserver %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString().c_str());
-  Client.printf("webSocketPort %d\r\n", ipAddress_struct.WEBSERVERPORT);
-  Client.printf("NTP_1 %s\r\n", IPAddress(ipAddress_struct.NTP_1).toString().c_str());
-  Client.printf("NTP_2 %s\r\n", IPAddress(ipAddress_struct.NTP_2).toString().c_str());
-  Client.printf("NTP USE %d\r\n", ipAddress_struct.ntpuse);
-  Client.printf("\r\nWould you like to change Defult Setting? \r\n It will be reboot now.(Y/n) ");
+  selectPrintf("\r\nipaddress %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString().c_str());
+  selectPrintf("gateway %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString().c_str());
+  selectPrintf("subnetmask %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString().c_str());
+  selectPrintf("dns1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString().c_str());
+  selectPrintf("dns2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString().c_str());
+  selectPrintf("websocketserver %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString().c_str());
+  selectPrintf("webSocketPort %d\r\n", ipAddress_struct.WEBSERVERPORT);
+  selectPrintf("NTP_1 %s\r\n", IPAddress(ipAddress_struct.NTP_1).toString().c_str());
+  selectPrintf("NTP_2 %s\r\n", IPAddress(ipAddress_struct.NTP_2).toString().c_str());
+  selectPrintf("NTP USE %d\r\n", ipAddress_struct.ntpuse);
+  selectPrintf("\r\nWould you like to change Defult Setting? \r\n It will be reboot now.(Y/n) ");
 
   int c = clientReadTimeout(10000);
   // while (1)
@@ -492,7 +499,7 @@ void init_configCallback(cmd *cmdPtr)
   }
   else if (c == 'n')
   {
-    Client.printf("\r\nCanceled...");
+    selectPrintf("\r\nCanceled...");
     return;
   }
   // }
@@ -511,8 +518,8 @@ void printLocalTime()
   getLocalTime(&timeinfo, 1);
   char strftime_buf[64];
   strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-  Client.printf("\r\nThe current date/time in is: %s ", strftime_buf);
-  Client.println();
+  selectPrintf("\r\nThe current date/time in is: %s ", strftime_buf);
+  selectPrintf("\r\n");
 }
 void getNtpTime()
 {
@@ -526,14 +533,14 @@ void getNtpTime()
     struct timeval tmv;
     tmv.tv_sec = now;
     tmv.tv_usec = 0;
-    //settimeofday(&tmv, NULL); // 웹에서 PC시간으로 설정을 한다.
-    Client.printf("Ntp Time Get succeed %ld\r\n", now);
+    // settimeofday(&tmv, NULL); // 웹에서 PC시간으로 설정을 한다.
+    selectPrintf("Ntp Time Get succeed %ld\r\n", now);
     printLocalTime();
   }
   else
   {
     setRtc();
-    Client.printf("Ntp Time Get succeed failed.\r\n");
+    selectPrintf("Ntp Time Get succeed failed.\r\n");
     printLocalTime();
   }
 }
@@ -548,7 +555,7 @@ void log_configCallback(cmd *cmdPtr)
   if (strArg.isSet())
   {
     logwrite_event();
-    Client.println("Dump data to file Done.");
+    selectPrintf("Dump data to file Done.");
     return;
   }
   strArg = cmd.getArgument("read");
@@ -583,7 +590,7 @@ void time_configCallback(cmd *cmdPtr)
   strValue = strArg.getValue();
   if (strValue.toInt() != 255 && (strValue.toInt() == 0 || strValue.toInt() == 1))
   {
-    Client.printf("ntp use status is %d\r\n", strValue.toInt());
+    selectPrintf("ntp use status is %d\r\n", strValue.toInt());
     ipAddress_struct.ntpuse = strValue.toInt();
     if_modified = true;
   }
@@ -594,7 +601,7 @@ void time_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong NTP1 Ip address %s", strValue);
+      selectPrintf("\r\nError Wrong NTP1 Ip address %s", strValue);
       doc_tx["error"] = "Error Wrong Ip ntp1";
       return;
     }
@@ -611,7 +618,7 @@ void time_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong NTP2 Ip address %s", strValue);
+      selectPrintf("\r\nError Wrong NTP2 Ip address %s", strValue);
       doc_tx["error"] = "Error Wrong Ip ntp2";
       return;
     }
@@ -642,16 +649,16 @@ void ntptime_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   doc_tx["command_type"] = cmd.getName(); // + String(chp);
   readnWriteEEProm();
-  Client.printf("IPADDRESS %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString());
-  Client.printf("GATEWAY %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString());
-  Client.printf("SUBNETMASK %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString());
-  Client.printf("WEBSOCKETSERVER %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
-  Client.printf("DNS1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString());
-  Client.printf("DNS2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString());
-  Client.printf("NTP_1 %s\r\n", ntp_1.toString().c_str());
-  Client.printf("NTP_2 %s\r\n", ntp_2.toString().c_str());
-  Client.printf("WEBSERVERPORT %d\r\n", ipAddress_struct.WEBSERVERPORT);
-  Client.printf("ntpuse %d\r\n", ipAddress_struct.ntpuse);
+  selectPrintf("IPADDRESS %s\r\n", IPAddress(ipAddress_struct.IPADDRESS).toString());
+  selectPrintf("GATEWAY %s\r\n", IPAddress(ipAddress_struct.GATEWAY).toString());
+  selectPrintf("SUBNETMASK %s\r\n", IPAddress(ipAddress_struct.SUBNETMASK).toString());
+  selectPrintf("WEBSOCKETSERVER %s\r\n", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
+  selectPrintf("DNS1 %s\r\n", IPAddress(ipAddress_struct.DNS1).toString());
+  selectPrintf("DNS2 %s\r\n", IPAddress(ipAddress_struct.DNS2).toString());
+  selectPrintf("NTP_1 %s\r\n", ntp_1.toString().c_str());
+  selectPrintf("NTP_2 %s\r\n", ntp_2.toString().c_str());
+  selectPrintf("WEBSERVERPORT %d\r\n", ipAddress_struct.WEBSERVERPORT);
+  selectPrintf("ntpuse %d\r\n", ipAddress_struct.ntpuse);
   configTime(0, 0, ntp_1.toString().c_str(), ntp_2.toString().c_str());
   // Wait for time to be set, or use RTC time if NTP server is not available
   time_t now = time(nullptr);
@@ -659,14 +666,14 @@ void ntptime_configCallback(cmd *cmdPtr)
   {
     delay(1000);
     now = time(nullptr);
-    Client.printf("\n\rRTC time set to system time %ld", now);
+    selectPrintf("\n\rRTC time set to system time %ld", now);
     if (now < 1100000000)
     {
       // Use RTC time if NTP server is not available and RTC is write-protected
       struct timeval tv;
       gettimeofday(&tv, nullptr);
       // rtc.SetDateTime(tv.tv_sec);
-      Client.println("\n\rRTC time set to system time");
+      selectPrintf("\n\rRTC time set to system time");
       // break;
     }
   }
@@ -675,12 +682,12 @@ void ntptime_configCallback(cmd *cmdPtr)
     // Set the RTC time to the system time
     // rtc.SetDateTime(now);
     doc_tx["message"] = "RTC time was syncronized with NTP time"; // + String(chp);
-    Client.println("\n\rRTC time was syncronized with NTP time");
+    selectPrintf("\n\rRTC time was syncronized with NTP time");
   }
   else
   {
     doc_tx["message"] = "NTP server not available, check ntp server ipaddress time"; // + String(chp);
-    Client.println("\n\rNTP server not available, check ntp server ipaddress time");
+    selectPrintf("\n\rNTP server not available, check ntp server ipaddress time");
   }
 }
 
@@ -705,18 +712,18 @@ void user_configCallback(cmd *cmdPtr)
       strcpy(sUserInfo.passwd, "admin");
       fwrite((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
       fclose(fp);
-      Client.printf("\r\ndefault user and file created try again: %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+      selectPrintf("\r\ndefault user and file created try again: %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
       return;
     }
     else
-      Client.printf("File point fail!\r\n");
+      selectPrintf("File point fail!\r\n");
     return;
   };
   int nRead = fread((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
-  Client.printf("\r\nRead  : %d\r\n", nRead);
+  selectPrintf("\r\nRead  : %d\r\n", nRead);
   if (userid.length() == 0 && passwd.length() == 0)
   {
-    Client.printf("\r\nexgist user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+    selectPrintf("\r\nexgist user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
     doc_tx["userid"] = sUserInfo.userid;
     doc_tx["passwd"] = sUserInfo.passwd;
     fclose(fp);
@@ -731,7 +738,7 @@ void user_configCallback(cmd *cmdPtr)
   if (fp)
   {
     fwrite((byte *)&sUserInfo, sizeof(sUserInfo), 1, fp);
-    Client.printf("\r\nChanged user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
+    selectPrintf("\r\nChanged user : %s %s\r\n", sUserInfo.userid, sUserInfo.passwd);
     doc_tx["userid"] = sUserInfo.userid;
     doc_tx["passwd"] = sUserInfo.passwd;
     fclose(fp);
@@ -757,7 +764,7 @@ void rm_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
-  Client.printf("\r\n");
+  selectPrintf("\r\n");
 
   if (argVal.length() == 0)
     return;
@@ -766,9 +773,9 @@ void rm_configCallback(cmd *cmdPtr)
   {
     argVal = String("/spiffs/") + argVal;
     if (unlink(argVal.c_str()) == -1)
-      Client.printf("Faild to delete %s\r\n", argVal.c_str());
+      selectPrintf("Faild to delete %s\r\n", argVal.c_str());
     else
-      Client.printf("File deleted %s\r\n", argVal.c_str());
+      selectPrintf("File deleted %s\r\n", argVal.c_str());
     return;
   }
 
@@ -777,7 +784,7 @@ void rm_configCallback(cmd *cmdPtr)
   dir = opendir("/spiffs/");
   if (!dir)
   {
-    Client.printf("Error opening directory\r\n");
+    selectPrintf("Error opening directory\r\n");
     return;
   }
   struct dirent *entry;
@@ -791,37 +798,58 @@ void rm_configCallback(cmd *cmdPtr)
 
   while ((entry = readdir(dir)) != NULL)
   {
-    // Client.printf("find file %s %s \r\n", argVal.c_str(),entry->d_name);
+    // selectPrintf("find file %s %s \r\n", argVal.c_str(),entry->d_name);
     if (entry->d_type == DT_REG && strlen(entry->d_name) > ext_len &&
         strcmp(entry->d_name + strlen(entry->d_name) - ext_len, argVal.c_str()) == 0)
     {
       String filePath = "/spiffs/" + String(entry->d_name);
-      // Client.printf("filePath%s", filePath.c_str());
+      // selectPrintf("filePath%s", filePath.c_str());
       if (unlink(filePath.c_str()) != 0)
       {
-        // Client.printf("Failed to delete file %s", filePath.c_str());
+        // selectPrintf("Failed to delete file %s", filePath.c_str());
       }
-      Client.printf("deleted file %s\r\n", filePath.c_str());
+      selectPrintf("deleted file %s\r\n", filePath.c_str());
     }
   }
 }
 
 //
+void selectPrintf(const char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+  size_t length = vsnprintf(NULL, 0, format, args) + 1;
+  length = length > 1024 ? length : 1024;
+  char *buffer = (char *)malloc(length);
+  if (buffer == NULL)
+  {
+    Serial.println("Error: Failed to allocate memory for buffer");
+    va_end(args); // Clean up the variable arguments
+    return;
+  }
+  vsnprintf(buffer, length, format, args);
+  if (Client && Client.connected())
+    Client.printf(buffer);
+  if (SerialBT.hasClient())
+    SerialBT.print(buffer);
+  free(buffer);
+  va_end(args);
+}
 void readFromFile(String filename)
 {
   FILE *f;
   f = fopen(filename.c_str(), "r");
   if (f == NULL)
   {
-    Client.printf("Failed to open file for reading\r\n");
+    selectPrintf("Failed to open file for reading\r\n");
     return;
   }
   char line[64];
   while (fgets(line, sizeof(line), f))
   {
-    Client.printf("%s", line);
+    selectPrintf("%s", line);
   }
-  Client.printf("\r\n");
+  selectPrintf("\r\n");
 
   fclose(f);
 }
@@ -829,20 +857,20 @@ void readFromFile(String filename)
 void reboot_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  Client.printf("\r\nNow System Rebooting...\r\n");
+  selectPrintf("\r\nNow System Rebooting...\r\n");
   esp_restart();
 }
 void format_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  Client.printf("\r\nWould you system formating(Y/n)...\r\n");
+  selectPrintf("\r\nWould you system formating(Y/n)...\r\n");
   while (1)
   {
     int c = Client.read();
     if (c == 'Y')
     {
       littleFsInit(1);
-      Client.printf("\r\nSystem format completed\r\n");
+      selectPrintf("\r\nSystem format completed\r\n");
       return;
     }
     if (c == 'n')
@@ -854,7 +882,7 @@ void cat_configCallback(cmd *cmdPtr)
   Command cmd(cmdPtr);
   Argument arg = cmd.getArgument(0);
   String argVal = arg.getValue();
-  Client.printf("\r\n");
+  selectPrintf("\r\n");
 
   if (argVal.length() == 0)
     return;
@@ -865,14 +893,14 @@ void cat_configCallback(cmd *cmdPtr)
 // void del_configCallback(cmd *cmdPtr)
 // {
 //   Command cmd(cmdPtr);
-//   Client.printf(cmd.getName().c_str());
-//   Client.printf(" command done\r\n");
+//   selectPrintf(cmd.getName().c_str());
+//   selectPrintf(" command done\r\n");
 // }
 void mv_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  Client.printf(cmd.getName().c_str());
-  Client.printf(" command done\r\n");
+  selectPrintf(cmd.getName().c_str());
+  selectPrintf(" command done\r\n");
 }
 
 void ip_configCallback(cmd *cmdPtr)
@@ -888,18 +916,18 @@ void ip_configCallback(cmd *cmdPtr)
 
   if (!strArg.isSet())
   {
-    Client.printf("\r\nipaddress %s", ipaddress.toString().c_str());
-    Client.printf("\r\ngateway %s", gateway.toString().c_str());
-    Client.printf("\r\nsubnetmask %s", subnetmask.toString().c_str());
-    Client.printf("\r\ndns1 %s", dns1.toString().c_str());
-    Client.printf("\r\ndns2 %s", dns2.toString().c_str());
-    Client.printf("\r\nNTP_1 %s", ntp_1.toString().c_str());
-    Client.printf("\r\nNTP_2 %s", ntp_2.toString().c_str());
-    Client.printf("\r\nwebsocketserver %s", websocketserver.toString().c_str());
-    Client.printf("\r\nwebSocketPort %d\r\n", webSocketPort);
-    Client.printf("\r\nbaudrate %d\r\n", ipAddress_struct.BAUDRATE);
-    Client.printf("\r\ninterval %d\r\n", ipAddress_struct.Q_INTERVAL);
-    Client.printf("\r\nver %s", ver);
+    selectPrintf("\r\nipaddress %s", ipaddress.toString().c_str());
+    selectPrintf("\r\ngateway %s", gateway.toString().c_str());
+    selectPrintf("\r\nsubnetmask %s", subnetmask.toString().c_str());
+    selectPrintf("\r\ndns1 %s", dns1.toString().c_str());
+    selectPrintf("\r\ndns2 %s", dns2.toString().c_str());
+    selectPrintf("\r\nNTP_1 %s", ntp_1.toString().c_str());
+    selectPrintf("\r\nNTP_2 %s", ntp_2.toString().c_str());
+    selectPrintf("\r\nwebsocketserver %s", websocketserver.toString().c_str());
+    selectPrintf("\r\nwebSocketPort %d\r\n", webSocketPort);
+    selectPrintf("\r\nbaudrate %d\r\n", ipAddress_struct.BAUDRATE);
+    selectPrintf("\r\ninterval %d\r\n", ipAddress_struct.Q_INTERVAL);
+    selectPrintf("\r\nver %s", ver);
 
     doc_tx["ipaddress"] = ipaddress.toString();
     doc_tx["gateway"] = gateway.toString();
@@ -926,7 +954,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong Ip address %s", strValue);
+      selectPrintf("\r\nError Wrong Ip address %s", strValue);
       doc_tx["error"] = "Error Wrong Ipaddress ";
       return;
     }
@@ -944,7 +972,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong gateway %s", strValue);
+      selectPrintf("\r\nError Wrong gateway %s", strValue);
       doc_tx["error"] = "Error Wrong gateway";
       return;
     }
@@ -961,7 +989,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong subnetmask %s", strValue);
+      selectPrintf("\r\nError Wrong subnetmask %s", strValue);
       doc_tx["error"] = "Error Wrong subnetmask";
       return;
     }
@@ -978,7 +1006,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong websocketserver %s", strValue);
+      selectPrintf("\r\nError Wrong websocketserver %s", strValue);
       doc_tx["error"] = "Error Wrong websocketserver";
       return;
     }
@@ -996,7 +1024,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong dns1 %s", strValue);
+      selectPrintf("\r\nError Wrong dns1 %s", strValue);
       doc_tx["error"] = "Error Wrong dns1";
       return;
     }
@@ -1014,7 +1042,7 @@ void ip_configCallback(cmd *cmdPtr)
     strValue = strArg.getValue();
     if (IPAddress().fromString(strValue) == false)
     {
-      Client.printf("\r\nError Wrong dns2 %s", strValue);
+      selectPrintf("\r\nError Wrong dns2 %s", strValue);
       doc_tx["error"] = "Error Wrong dns2";
       return;
     }
@@ -1059,17 +1087,17 @@ void ip_configCallback(cmd *cmdPtr)
   ipAddress_struct.DNS2 = (uint32_t)dns2;
   ipAddress_struct.WEBSERVERPORT = webSocketPort;
 
-  Client.printf("\r\nipaddress %s", IPAddress(ipAddress_struct.IPADDRESS).toString());
-  Client.printf("\r\nwateway %s", IPAddress(ipAddress_struct.GATEWAY).toString());
-  Client.printf("\r\nsubnetmask %s", IPAddress(ipAddress_struct.SUBNETMASK).toString());
-  Client.printf("\r\nwebsocket %s", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
-  Client.printf("\r\ndns1 %s", IPAddress(ipAddress_struct.DNS1).toString());
-  Client.printf("\r\ndns2 %s", IPAddress(ipAddress_struct.DNS2).toString());
-  Client.printf("\r\nwebserverport %d", ipAddress_struct.WEBSERVERPORT);
-  Client.printf("\r\nbaudrate %d", ipAddress_struct.BAUDRATE);
-  Client.printf("\r\nmodbus interval %d", ipAddress_struct.Q_INTERVAL);
-  Client.printf("\r\nver %s", ver);
-  Client.printf("\r\nWould you like to change IpAddress? \r\n I will be affect after reboot.(Y/n) ");
+  selectPrintf("\r\nipaddress %s", IPAddress(ipAddress_struct.IPADDRESS).toString());
+  selectPrintf("\r\nwateway %s", IPAddress(ipAddress_struct.GATEWAY).toString());
+  selectPrintf("\r\nsubnetmask %s", IPAddress(ipAddress_struct.SUBNETMASK).toString());
+  selectPrintf("\r\nwebsocket %s", IPAddress(ipAddress_struct.WEBSOCKETSERVER).toString());
+  selectPrintf("\r\ndns1 %s", IPAddress(ipAddress_struct.DNS1).toString());
+  selectPrintf("\r\ndns2 %s", IPAddress(ipAddress_struct.DNS2).toString());
+  selectPrintf("\r\nwebserverport %d", ipAddress_struct.WEBSERVERPORT);
+  selectPrintf("\r\nbaudrate %d", ipAddress_struct.BAUDRATE);
+  selectPrintf("\r\nmodbus interval %d", ipAddress_struct.Q_INTERVAL);
+  selectPrintf("\r\nver %s", ver);
+  selectPrintf("\r\nWould you like to change IpAddress? \r\n I will be affect after reboot.(Y/n) ");
 
   // int c = clientReadTimeout(10000);
 
@@ -1078,7 +1106,7 @@ void ip_configCallback(cmd *cmdPtr)
   // }
   // else if (c == 'n' || c == -1)
   // {
-  //   Client.printf("\r\nCanceled...");
+  //   selectPrintf("\r\nCanceled...");
   //   return;
   // }
   EEPROM.writeBytes(1, (const byte *)&ipAddress_struct, sizeof(nvsSystemSet));
@@ -1108,19 +1136,19 @@ void ip_configCallback(cmd *cmdPtr)
   doc_tx["interval"] = ipAddress_struct.Q_INTERVAL;
   doc_tx["ver"] = ver;
 
-  Client.printf("\r\nSucceed.. You can use reboot command\r\n");
+  selectPrintf("\r\nSucceed.. You can use reboot command\r\n");
 }
 void date_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  Client.printf(" command done\r\n");
+  selectPrintf(" command done\r\n");
 }
 void df_configCallback(cmd *cmdPtr)
 {
   Command cmd(cmdPtr);
-  Client.printf("\r\nESP32 Partition table:\r\n");
-  Client.printf("| Type | Sub |  Offset  |   Size   |       Label      |\r\n");
-  Client.printf("| ---- | --- | -------- | -------- | ---------------- |\r\n");
+  selectPrintf("\r\nESP32 Partition table:\r\n");
+  selectPrintf("| Type | Sub |  Offset  |   Size   |       Label      |\r\n");
+  selectPrintf("| ---- | --- | -------- | -------- | ---------------- |\r\n");
 
   esp_partition_iterator_t pi = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
   if (pi != NULL)
@@ -1128,31 +1156,31 @@ void df_configCallback(cmd *cmdPtr)
     do
     {
       const esp_partition_t *p = esp_partition_get(pi);
-      Client.printf("|  %02x  | %02x  | 0x%06X | 0x%06X | %-16s |\r\n",
-                    p->type, p->subtype, p->address, p->size, p->label);
+      selectPrintf("|  %02x  | %02x  | 0x%06X | 0x%06X | %-16s |\r\n",
+                   p->type, p->subtype, p->address, p->size, p->label);
     } while (pi = (esp_partition_next(pi)));
   }
-  Client.printf("\r\n|  HEAP   |       |          |   %d | ESP.getHeapSize |\r\n", ESP.getHeapSize());
-  Client.printf("|Free heap|       |          |   %d | ESP.getFreeHeap |\r\n", ESP.getFreeHeap());
-  Client.printf("|Psram    |       |          |   %d | ESP.PsramSize   |\r\n", ESP.getPsramSize());
-  Client.printf("|Free Psrm|       |          |   %d | ESP.FreePsram   |\r\n", ESP.getFreePsram());
-  Client.printf("|UsedPsram|       |          |   %d | Psram - FreeRam |\r\n", ESP.getPsramSize() - ESP.getFreePsram());
-  Client.printf("|Modbus Threed heap free     |   %d | Psram - FreeRam |\r\n", uxTaskGetStackHighWaterMark(h_pxModbus));
+  selectPrintf("\r\n|  HEAP   |       |          |   %d | ESP.getHeapSize |\r\n", ESP.getHeapSize());
+  selectPrintf("|Free heap|       |          |   %d | ESP.getFreeHeap |\r\n", ESP.getFreeHeap());
+  selectPrintf("|Psram    |       |          |   %d | ESP.PsramSize   |\r\n", ESP.getPsramSize());
+  selectPrintf("|Free Psrm|       |          |   %d | ESP.FreePsram   |\r\n", ESP.getFreePsram());
+  selectPrintf("|UsedPsram|       |          |   %d | Psram - FreeRam |\r\n", ESP.getPsramSize() - ESP.getFreePsram());
+  selectPrintf("|Modbus Threed heap free     |   %d | Psram - FreeRam |\r\n", uxTaskGetStackHighWaterMark(h_pxModbus));
 }
 
 void errorCallback(cmd_error *errorPtr)
 {
   CommandError e(errorPtr);
 
-  Client.printf((String("ERROR: ") + e.toString()).c_str());
+  selectPrintf((String("ERROR: ") + e.toString()).c_str());
 
   if (e.hasCommand())
   {
-    Client.printf((String("Did you mean? ") + e.getCommand().toString()).c_str());
+    selectPrintf((String("Did you mean? ") + e.getCommand().toString()).c_str());
   }
   else
   {
-    Client.printf(cli.toString().c_str());
+    selectPrintf(cli.toString().c_str());
   }
 }
 void SimpleCLISetUp()
@@ -1443,13 +1471,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     if (de_err)
     {
       printf("");
-      Client.printf("requset Type is not JSON Type \r\n");
+      selectPrintf("requset Type is not JSON Type \r\n");
       break;
     }
     else
     {
       const char *req_type = doc_tx["command_type"].as<const char *>();
-      // Client.printf("requset Type  is %s \r\n", req_type);
+      // selectPrintf("requset Type  is %s \r\n", req_type);
 
       if (!String(req_type).compareTo("logRead"))
       {
@@ -1532,12 +1560,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       {
         doc_tx.clear();
 
-        Client.printf("requset Type is %s\r\n", req_type);
+        selectPrintf("requset Type is %s\r\n", req_type);
         webRequestNo = 1;
         cli.parse(req_type);
         sendString = "";
         serializeJson(doc_tx, sendString);
-        // Client.printf("%s\r\n", sendString);
+        // selectPrintf("%s\r\n", sendString);
         webSocket.sendTXT(num, sendString);
         /*
         int16_t qSocketSendRequest[5];
@@ -1589,7 +1617,7 @@ void readInputFromTelnetClient()
     // while (Client.available())
     Client.readBytes(readBuf, 1);
     input = "";
-    Client.printf("\r\n#");
+    selectPrintf("\r\n#");
   }
 }
 FILE *fUpdate;
@@ -1766,7 +1794,7 @@ void serverOnset()
       {
     webServer.sendHeader("Connection", "close");
     webServer.send(200, "text/plain", /*(update.haserror()) ? "fail" :*/ "OK");
-    Client.printf("Finish"); },
+    selectPrintf("Finish"); },
       []()
       {
         HTTPUpload &upload = webServer.upload();
@@ -1780,15 +1808,15 @@ void serverOnset()
         {
           fwrite((char *)upload.buf, upload.currentSize, 1, fUpdate);
           UpdateSize += upload.currentSize;
-          Client.printf("%d\r\n", upload.currentSize);
+          selectPrintf("%d\r\n", upload.currentSize);
         }
         else if (upload.status == UPLOAD_FILE_END)
         {
           fclose(fUpdate);
-          Client.printf("Upload END....File name : %s\r\n", upload.filename.c_str());
-          Client.printf("name : %s\r\n", upload.name.c_str());
-          Client.printf("type: %s\r\n", upload.type.c_str());
-          Client.printf("size: %d\r\n", upload.totalSize);
+          selectPrintf("Upload END....File name : %s\r\n", upload.filename.c_str());
+          selectPrintf("name : %s\r\n", upload.name.c_str());
+          selectPrintf("type: %s\r\n", upload.type.c_str());
+          selectPrintf("size: %d\r\n", upload.totalSize);
           // Update.end(false);
         }
       });
@@ -1907,7 +1935,7 @@ void serverOnset()
       filename ="File not found ";
       filename += webServer.uri();
       webServer.send(404, "text/plain", filename );
-      Client.printf("file name %s\r\n",webServer.uri().c_str() );
+      selectPrintf("file name %s\r\n",webServer.uri().c_str() );
     } });
 }
 void timeSet(int year, int mon, int day, int hour, int min, int sec)
@@ -1959,7 +1987,7 @@ int telnet_write(const char *format, va_list ap)
 //   // udp.broadcastTo(data, 1234);
 //   //WiFiClient *client= (WiFiClient *)userdata;
 //     //Client = (WiFiClient  *)userdata;
-//     Client.printf(ptr);
+//     selectPrintf(ptr);
 //     Client.flush();
 //   }
 //   return 0;
@@ -1999,7 +2027,7 @@ void readnWriteEEProm()
   if (EEPROM.read(0) != 0x55)
   {
     if (Client.connected())
-      Client.printf("\n\rInitialize....Ipset memory....to default..");
+      selectPrintf("\n\rInitialize....Ipset memory....to default..");
     EEPROM.writeByte(0, 0x55);
     ipAddress_struct.IPADDRESS = (uint32_t)IPAddress(192, 168, 0, 57);
     ipAddress_struct.GATEWAY = (uint32_t)IPAddress(192, 168, 0, 1);
@@ -2067,19 +2095,19 @@ void logfileRead(int32_t iStart, int32_t iEnd)
   while (!feof(fp))
   {
     readc = fread((byte *)&logData, sizeof(modBusData_t), sizeof(byte), fp);
-    Client.printf("\r\nreadc %d %d %d %d ", readc, icount, iStart, iEnd);
+    selectPrintf("\r\nreadc %d %d %d %d ", readc, icount, iStart, iEnd);
     if (icount >= iStart && icount < iEnd)
     {
       if (readc)
       {
-        Client.printf("\r\n%d/%d %s\t", icount, iLog, ctime((time_t *)&logData.logTime));
+        selectPrintf("\r\n%d/%d %s\t", icount, iLog, ctime((time_t *)&logData.logTime));
         doc_tx.clear();
         doc_tx["time"] = logData.logTime;
         modbusValues = doc_tx.createNestedArray("value");
         for (int16_t i = 0; i < 60; i++)
           modbusValues.add(logData.Data[i]);
         serializeJson(doc_tx, output);
-        Client.printf("%s", output.c_str());
+        selectPrintf("%s", output.c_str());
       }
     }
     icount++;
@@ -2101,8 +2129,8 @@ void printDateTime(const RtcDateTime &dt)
              dt.Hour(),
              dt.Minute(),
              dt.Second());
-  Client.printf("\r\nDs1302 RTC Time is ");
-  Client.printf(datestring);
+  selectPrintf("\r\nDs1302 RTC Time is ");
+  selectPrintf(datestring);
 }
 void setRtc()
 {
@@ -2152,12 +2180,53 @@ void setRtc()
   tmv.tv_usec = 0;
   settimeofday(&tmv, NULL);
 }
+void readInputSerialBT()
+{
+  char readBuf[2];
+  char readCount = 0;
+  // while (true)
+  {
+    if (SerialBT.available())
+    {
+      if (SerialBT.readBytes(readBuf, 1))
+      {
+        readBuf[1] = 0x00;
+        if (readBuf[0] == 8)
+        {
+          input.remove(input.length() - 1);
+        }
+        else
+        {
+          printf("%c", readBuf[0]);
+          input += String(readBuf);
+        }
+      }
+      if (readBuf[0] == '\n' || readBuf[0] == '\r')
+      {
+        setOutputDirection = BLUETOOTH;
+        cli.parse(input);
+        setOutputDirection = NONE;
+        // while (Serial.available())
+        SerialBT.readBytes(readBuf, 1);
+        input = "";
+        SerialBT.printf("\n# ");
+        // break;
+      }
+    }
+  }
+  // Serial.setTimeout(100);
+}
 void setup()
 {
   int isEthernetConnect = false;
   pinMode(33, OUTPUT);
   readnWriteEEProm();
   Serial.begin(ipAddress_struct.BAUDRATE);
+
+  String macAddress = WiFi.macAddress();
+  macAddress.replace(":", "");
+  SerialBT.begin("Charger" + macAddress);
+
   // Serial.begin(115200);
   EEPROM.begin(100);
   setRtc();
@@ -2184,8 +2253,9 @@ void setup()
     WiFi.softAPConfig(IPAddress(192, 168, 11, 1), IPAddress(192, 168, 11, 1), IPAddress(255, 255, 255, 0));
     printf("\r\nWiFi.mode(WIFI_MODE_AP)");
     WiFi.mode(WIFI_MODE_AP);
+    macAddress = String(soft_ap_ssid) + macAddress;
     printf("\r\nWiFi.softAP(soft_ap_ssid, soft_ap_password)");
-    WiFi.softAP(soft_ap_ssid, soft_ap_password);
+    WiFi.softAP(macAddress.c_str() , soft_ap_password);
   }
   else
   {
@@ -2215,7 +2285,7 @@ void setup()
   xMutex = xSemaphoreCreateMutex();
   xTaskCreate(modbusRequest, "modbus", 2000, NULL, 1, h_pxModbus);
   // stdout = funopen(NULL, NULL, telnet_print, 0, NULL/*Client*/);
-  esp_log_set_vprintf(telnet_write);
+  // esp_log_set_vprintf(telnet_write);
 }
 
 unsigned long previousmills = 0;
@@ -2232,6 +2302,8 @@ void loop()
   sendString = "";
   time_t nowTime;
   int16_t rRequest[5];
+  if (SerialBT.available())
+    readInputSerialBT();
   if (xQueueReceive(h_sendSocketQueue, &rRequest, (TickType_t)5))
   {
     // rRequest[0] = 0x06; request to send Modbus data
@@ -2247,7 +2319,7 @@ void loop()
   {
     time(&nowTime);
     doc_tx["command_type"] = "nowtime";
-    doc_tx["time"] = nowTime ;//- gmtOffset_sec;
+    doc_tx["time"] = nowTime; //- gmtOffset_sec;
     serializeJson(doc_tx, sendString);
     webSocket.broadcastTXT(sendString);
     previousmills = now;
@@ -2265,7 +2337,7 @@ void loop()
 
 // char *chp = (char *)heap_caps_malloc(st.st_size + 1, MALLOC_CAP_8BIT);
 // webServer.send(200, content_type, chp,nRead);
-// Client.printf("file read %d\r\n", nRead);
+// selectPrintf("file read %d\r\n", nRead);
 // chp[readCount] = 0x00;
 void readFileToWeb(const char *content_type, const char *filename)
 {
@@ -2274,14 +2346,14 @@ void readFileToWeb(const char *content_type, const char *filename)
 
   int isExist = stat(filename, &st);
   isExist = st.st_size;
-  Client.printf("file name %s \r\n ", filename);
-  Client.printf("file size  %d\r\n ", st.st_size);
+  selectPrintf("file name %s \r\n ", filename);
+  selectPrintf("file size  %d\r\n ", st.st_size);
   if (!isExist)
   {
     String readString = "file not found ";
     readString += filename;
     webServer.send(404, "text/plain", readString);
-    Client.printf("file not exist %s %d\r\n ", filename, st.st_size);
+    selectPrintf("file not exist %s %d\r\n ", filename, st.st_size);
     return;
   }
 
@@ -2299,13 +2371,13 @@ void readFileToWeb(const char *content_type, const char *filename)
   char *chp = (char *)malloc(1024);
   if (chp == NULL)
   {
-    Client.printf("memory error \r\n");
+    selectPrintf("memory error \r\n");
     String readString = "malloc allocate Error";
     readString += filename;
     webServer.send(404, "text/plain", readString);
     return;
   }
-  Client.printf("memory allocated succeed\r\n");
+  selectPrintf("memory allocated succeed\r\n");
   fUpdate = fopen(filename, "r");
   if (fUpdate == NULL)
   {
@@ -2322,7 +2394,7 @@ void readFileToWeb(const char *content_type, const char *filename)
   }
   fclose(fUpdate);
   free(chp);
-  Client.printf("finished send file\r\n");
+  selectPrintf("finished send file\r\n");
 }
 
 // while ((ch = fgetc(fUpdate)) != EOF)
